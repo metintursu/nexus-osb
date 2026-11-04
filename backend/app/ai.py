@@ -1,6 +1,6 @@
-"""Bölge Beyni: yerel Ollama modeliyle konuşur; Ollama yoksa kural tabanlı analist devreye girer.
+"""Zone Brain: talks to a local Ollama model; if Ollama is not available, a rule-based analyst answers.
 
-Hiçbir bulut servisi kullanılmaz. Ollama bilgisayarında ücretsiz ve yerel çalışır.
+No cloud service is used. Ollama runs locally and free of charge on your own computer.
 """
 import os
 import re
@@ -10,16 +10,23 @@ import httpx
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://host.docker.internal:11434").rstrip("/")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "")
 
-SYSTEM = """Sen NEXUS OSB'nin "Bölge Beyni"sin (otopilot, konuşan tesis ajanları, usta havuzu, hidrojen vadisi ve afet modu dahil): 30 tesisli bir organize sanayi bölgesinin enerji, lojistik,
-atık/simbiyoz, karbon, su ve güvenlik verilerini yöneten bir yapay zekâ operasyon müdürüsün.
-Kurallar:
-- Türkçe, kısa ve net yaz. Gereksiz giriş yapma.
-- Yalnızca aşağıdaki CANLI DURUM verisine dayan; veri yoksa uydurma, "veride yok" de.
-- Mümkün olduğunda sayı ver (MW, TL, tCO2, %), somut aksiyon öner ve hangi tesisi etkilediğini söyle.
-- Önerilerini 'Hemen', 'Bugün', 'Bu hafta' gibi zamanlara ayır.
+SYSTEM = """You are the "Zone Brain" of NEXUS OSB (including autopilot, talking plant agents, the technician pool,
+the hydrogen valley and disaster mode): an AI operations manager running the energy, logistics, waste/symbiosis,
+carbon, water and safety data of an organised industrial zone with about 30 plants.
+Rules:
+- Answer in English, briefly and clearly. No filler introductions.
+- Rely only on the LIVE STATUS data below; if something is not in the data, do not make it up — say so.
+- Give numbers whenever possible (MW, TRY, tCO2, %), suggest concrete actions and name the affected plants.
+- Group recommendations by time: 'Now', 'Today', 'This week'.
 """
 
 _state = {"model": None, "models": [], "ok": False, "error": None}
+
+STATUS_EN = {"calisiyor": "running", "bosta": "off shift", "ariza": "fault", "bakim": "maintenance", "durdu": "stopped"}
+PERIOD_EN = {"gece": "night", "gunduz": "day", "puant": "peak"}
+SEV_EN = {"kritik": "critical", "uyari": "warning", "bilgi": "info", "firsat": "opportunity"}
+PART_EN = {"enerji": "energy", "lojistik": "logistics", "dongusel": "circularity", "guvenlik": "safety", "su": "water",
+           "verimlilik": "efficiency"}
 
 
 async def status():
@@ -35,9 +42,9 @@ async def status():
             if not pref and OLLAMA_MODEL:
                 pref = next((m for m in models if m.startswith(OLLAMA_MODEL)), None)
             _state["model"] = pref or (models[0] if models else None)
-        _state["error"] = None if models else "Ollama çalışıyor ama yüklü model yok (ollama pull llama3.2)"
-    except Exception as e:  # noqa: BLE001
-        _state.update(ok=False, models=[], error=f"Ollama'ya ulaşılamadı ({OLLAMA_URL})")
+        _state["error"] = None if models else "Ollama is running but no model is installed (ollama pull llama3.2)"
+    except Exception:  # noqa: BLE001
+        _state.update(ok=False, models=[], error=f"Could not reach Ollama ({OLLAMA_URL})")
     return {"url": OLLAMA_URL, **_state}
 
 
@@ -48,52 +55,53 @@ def set_model(name):
     return False
 
 
-SCN_WORDS = {"deprem": "deprem", "sızıntı": "kimyasal_sizinti", "sizinti": "kimyasal_sizinti", "kesinti": "sebeke_kesintisi",
-             "zam": "enerji_zammi", "doğalgaz": "dogalgaz_kisinti", "dogalgaz": "dogalgaz_kisinti", "ihracat": "ihracat_siparisi",
-             "sıcak": "sicak_hava", "liman": "liman_grevi"}
+SCN_WORDS = {"earthquake": "deprem", "quake": "deprem", "deprem": "deprem", "leak": "kimyasal_sizinti", "chemical": "kimyasal_sizinti",
+             "sızıntı": "kimyasal_sizinti", "outage": "sebeke_kesintisi", "blackout": "sebeke_kesintisi", "kesinti": "sebeke_kesintisi",
+             "price": "enerji_zammi", "gas": "dogalgaz_kisinti", "doğalgaz": "dogalgaz_kisinti", "export": "ihracat_siparisi",
+             "heat": "sicak_hava", "port": "liman_grevi", "liman": "liman_grevi"}
 
 
 def command(w, msg):
-    """Sesli/yazılı komutları doğrudan uygular. Uygulanan komut yoksa None."""
+    """Applies spoken/typed commands directly (English, Turkish also understood). Returns None if no command matched."""
     q = msg.lower()
-    on = bool(re.search(r"\b(aç|ac|başlat|baslat|devreye|etkinleştir|çalıştır)", q))
-    off = bool(re.search(r"\b(kapat|durdur|devre dışı|iptal)", q))
+    on = bool(re.search(r"\b(turn on|switch on|enable|engage|open|start|activate|run|aç|ac|başlat|devreye)\b", q))
+    off = bool(re.search(r"\b(turn off|switch off|disable|disengage|close|stop|cancel|kapat|durdur|iptal)\b", q))
     done = []
-    if "otopilot" in q and (on or off):
+    if re.search(r"auto ?pilot|otopilot", q) and (on or off):
         w.autopilot.set(on and not off)
-        done.append(f"Otopilot {'açıldı' if on and not off else 'kapatıldı'}.")
-    if re.search(r"havuz|filo", q) and (on or off):
+        done.append(f"Autopilot {'engaged' if on and not off else 'disengaged'}.")
+    if re.search(r"\bpool\b|fleet|havuz|filo", q) and (on or off):
         w.logistics.pool = on and not off
-        w.log("lojistik", f"Ortak filo havuzu {'açıldı' if w.logistics.pool else 'kapatıldı'} (komut)")
-        done.append(f"Ortak filo havuzu {'açıldı' if w.logistics.pool else 'kapatıldı'}.")
-    if "hidrojen" in q and (on or off):
+        w.log("lojistik", f"Shared fleet pool {'opened' if w.logistics.pool else 'closed'} (command)")
+        done.append(f"Shared fleet pool {'opened' if w.logistics.pool else 'closed'}.")
+    if re.search(r"hydrogen|hidrojen|\bh2\b", q) and (on or off):
         w.hydrogen.enabled = on and not off
-        done.append(f"Hidrojen Vadisi {'devrede' if w.hydrogen.enabled else 'devre dışı'}.")
-    m = re.search(r"tm[- ]?([1-4])", q)
-    if re.search(r"rahatlat|kaydır|kaydir|esneklik|yük at", q):
-        if m:
+        done.append(f"Hydrogen Valley {'online' if w.hydrogen.enabled else 'offline'}.")
+    m = re.search(r"tm[- ]?([1-9])", q)
+    if re.search(r"relieve|shift|flex|shed|reduce load|rahatlat|kaydır|esneklik", q):
+        if m and int(m.group(1)) <= len(w.energy.tms):
             tm = w.energy.tms[int(m.group(1)) - 1]
             n = w.energy.demand_response(w, tm["fabrikalar"], 60)
-            done.append(f"{tm['id']} rahatlatıldı: {n} tesiste 60 dk yük kaydırma (yüklenme %{tm['oran']*100:.0f}).")
+            done.append(f"{tm['id']} relieved: 60-min load shift at {n} sites (load {tm['oran']*100:.0f}%).")
         else:
             n = w.energy.demand_response(w, None, 60)
-            done.append(f"Bölge geneli talep kaydırma: {n} tesis, 60 dk.")
-    if "batarya" in q and re.search(r"otomatik|aç", q):
+            done.append(f"Zone-wide load shift: {n} sites for 60 min.")
+    if re.search(r"battery|batarya", q) and re.search(r"auto|otomatik|on\b|aç", q):
         w.energy.mode = "otomatik"
-        done.append("Batarya otomatik moda alındı.")
-    mm = re.search(r"geri kazan\w*\D*(\d{1,2})", q)
+        done.append("Battery set to auto mode.")
+    mm = re.search(r"(?:reuse|recycl\w*|geri kazan\w*)\D*(\d{1,2})", q)
     if mm:
         w.water.reuse = max(0.0, min(0.45, int(mm.group(1)) / 100))
-        done.append(f"Su geri kazanımı %{w.water.reuse*100:.0f} yapıldı.")
-    if "senaryo" in q or any(k in q for k in ("deprem", "sızıntı", "sizinti")):
+        done.append(f"Water reuse set to {w.water.reuse*100:.0f}%.")
+    if re.search(r"scenario|senaryo|earthquake|quake|deprem|leak|sızıntı", q):
         if off and w.scenario:
-            w.stop_scenario("Komutla durduruldu")
-            done.append("Aktif senaryo durduruldu.")
-        elif on or "senaryo" in q:
+            w.stop_scenario("Stopped by command")
+            done.append("Active scenario stopped.")
+        elif on or re.search(r"scenario|senaryo", q):
             for word, key in SCN_WORDS.items():
                 if word in q:
                     sc = w.start_scenario(key)
-                    done.append(f"Senaryo başlatıldı: {sc['ad']}.")
+                    done.append(f"Scenario started: {sc['ad']}.")
                     break
     if not done:
         return None
@@ -103,12 +111,12 @@ def command(w, msg):
 async def chat(world, message, history=None):
     cmd = command(world, message)
     if cmd:
-        return {"cevap": cmd + "\n\n" + analyst(world, message if re.search(r"durum|özet", message.lower()) else "özet").split("\n_Yerel")[0],
-                "kaynak": "komut", "komut": True}
+        return {"cevap": cmd + "\n\n" + analyst(world, message if re.search(r"status|summary|overview", message.lower()) else "summary").split("\n_Local")[0],
+                "kaynak": "command", "komut": True}
     if not _state["ok"]:
         await status()
     if _state["ok"] and _state["model"]:
-        msgs = [{"role": "system", "content": SYSTEM + "\n\nCANLI DURUM:\n" + world.context_text()}]
+        msgs = [{"role": "system", "content": SYSTEM + "\n\nLIVE STATUS:\n" + world.context_text()}]
         for h in (history or [])[-8:]:
             if h.get("role") in ("user", "assistant") and h.get("content"):
                 msgs.append({"role": h["role"], "content": str(h["content"])[:2000]})
@@ -124,17 +132,20 @@ async def chat(world, message, history=None):
                     return {"cevap": text, "kaynak": f"ollama:{_state['model']}"}
         except Exception as e:  # noqa: BLE001
             _state["ok"] = False
-            _state["error"] = f"Ollama yanıt vermedi: {type(e).__name__}"
-    return {"cevap": analyst(world, message), "kaynak": "yerel-analist"}
+            _state["error"] = f"Ollama did not respond: {type(e).__name__}"
+    return {"cevap": analyst(world, message), "kaynak": "local-analyst"}
 
 
-# ---------------------------------------------------------------- kural tabanlı analist
+# ---------------------------------------------------------------- rule-based analyst
 def _n(x):
-    return f"{x:,.0f}".replace(",", ".")
+    return f"{x:,.0f}"
 
 
 def _tl(x):
-    return f"{x:,.0f}".replace(",", ".") + " TL"
+    return f"₺{x:,.0f}"
+
+
+GENERIC = {"zone", "logistics", "battery", "main", "central", "the", "new", "site"}
 
 
 def analyst(w, q):
@@ -143,89 +154,89 @@ def analyst(w, q):
     e = w.energy
     parts = []
 
-    # tesis adı geçiyorsa
+    # a plant is mentioned by name or id
     for f in w.factories:
         first = f.ad.split()[0].lower()
-        if first in ql or f.id.lower() in ql.split():
+        if (first not in GENERIC and re.search(r"\b" + re.escape(first) + r"\b", ql)) or f.id.lower() in re.findall(r"[a-z0-9-]+", ql):
             d = f.detail(w)
-            parts.append(f"**{f.ad}** ({f.s['ad']}, {f.calisan} çalışan, {f.vardiya} vardiya)\n"
-                         f"- Durum: {f.status}{' — ' + f.reason if f.reason else ''}\n"
-                         f"- Güç {f.power_kw/1000:.2f} MW · OEE %{f.oee*100:.0f} · emisyon {f.co2_kgh/1000:.2f} tCO2/saat\n"
-                         f"- Bugün: {d['bugun']['kwh']/1000:.1f} MWh, {d['bugun']['co2_kg']/1000:.1f} tCO2, ciro {_tl(d['bugun']['ciro_tl'])}, duruş {d['bugun']['durus_dk']:.0f} dk")
+            parts.append(f"**{f.ad}** ({f.s['ad']}, {f.calisan} employees, {f.vardiya} shift(s))\n"
+                         f"- Status: {STATUS_EN.get(f.status, f.status)}{' — ' + f.reason if f.reason else ''}\n"
+                         f"- Power {f.power_kw/1000:.2f} MW · OEE {f.oee*100:.0f}% · emissions {f.co2_kgh/1000:.2f} tCO2/h\n"
+                         f"- Today: {d['bugun']['kwh']/1000:.1f} MWh, {d['bugun']['co2_kg']/1000:.1f} tCO2, revenue {_tl(d['bugun']['ciro_tl'])}, downtime {d['bugun']['durus_dk']:.0f} min")
             links = [l for l in w.symbiosis.links if l["aktif"] and f.id in (l["ureten"], l["alan"])]
             if links:
-                parts.append("- Simbiyoz: " + ", ".join(f"{l['atik_ad']} ({l['ureten_ad']} → {l['alan_ad']})" for l in links))
+                parts.append("- Symbiosis: " + ", ".join(f"{l['atik_ad']} ({l['ureten_ad']} → {l['alan_ad']})" for l in links))
             opp = [o for o in w.symbiosis.opps if o["ureten"] == f.id][:2]
             for o in opp:
-                parts.append(f"- Fırsat: {o['atik_ad']} → {o['alan_ad']}, ayda ≈{_tl(o['aylik_kazanc_tl'])}")
+                parts.append(f"- Opportunity: {o['atik_ad']} → {o['alan_ad']}, ≈{_tl(o['aylik_kazanc_tl'])}/month")
             break
 
-    if re.search(r"enerji|elektrik|trafo|batarya|bess|ges|güneş|fatura|puant|sözleşme", ql):
+    if re.search(r"energy|electric|power|substation|transformer|battery|bess|solar|bill|peak|contract", ql):
         worst = max(e.tms, key=lambda t: t["oran"])
-        parts.append(f"**Enerji** — yük {k['guc_mw']} MW, GES {k['ges_mw']} MW, şebeke {k['sebeke_mw']} MW "
-                     f"(sözleşme {e.contract_kw/1000:.1f} MW), batarya %{k['soc']*100:.0f}. Tarife: {w.period} {w.tariff:.2f} TL/kWh.\n"
-                     f"- En yüklü trafo {worst['id']}: %{worst['oran']*100:.0f}\n"
-                     f"- Bugün fatura {_tl(e.today['fatura_tl'])}, sözleşme aşımı {e.today['asim_kwh']:.0f} kWh, "
-                     f"batarya tasarrufu {_tl(e.today['tasarruf_bess_tl'])}")
+        parts.append(f"**Energy** — load {k['guc_mw']} MW, solar {k['ges_mw']} MW, grid {k['sebeke_mw']} MW "
+                     f"(contract {e.contract_kw/1000:.1f} MW), battery {k['soc']*100:.0f}%. Tariff: {PERIOD_EN[w.period]} {w.tariff:.2f} TRY/kWh.\n"
+                     f"- Most loaded substation {worst['id']}: {worst['oran']*100:.0f}%\n"
+                     f"- Today's bill {_tl(e.today['fatura_tl'])}, contract overrun {e.today['asim_kwh']:.0f} kWh, "
+                     f"battery savings {_tl(e.today['tasarruf_bess_tl'])}")
         tips = []
         if worst["oran"] > 0.93:
-            tips.append(f"Hemen: {worst['id']}'deki esnek yükleri (döküm, metal, plastik) 30–60 dk kaydır.")
+            tips.append(f"Now: shift flexible loads on {worst['id']} (foundry, metal, plastics) by 30–60 min.")
         if w.period == "gunduz" and e.soc / e.bess_kwh < 0.6:
-            tips.append("Bugün: puant (17–22) öncesi bataryayı GES fazlasıyla doldur.")
+            tips.append("Today: charge the battery with surplus solar before the evening peak (17–22).")
         if e.mode != "otomatik":
-            tips.append("Hemen: batarya modunu 'otomatik' yap.")
-        tips.append("Bu hafta: 3 vardiyalı tesislerin kompresör ve fırın ön ısıtmalarını gece dilimine taşı.")
+            tips.append("Now: set the battery to 'auto'.")
+        tips.append("This week: move compressor and furnace pre-heating at 3-shift plants into the night band.")
         parts.append("\n".join("- " + t for t in tips))
 
-    if re.search(r"karbon|co2|emisyon|skdm|cbam|sera", ql):
+    if re.search(r"carbon|co2|emission|cbam|greenhouse|ghg", ql):
         c = w.carbon()
         top = c["fabrikalar"][:3]
-        parts.append(f"**Karbon** — bugün {c['bugun_t']} tCO2 (kapsam 1: {c['kapsam1_t']} t, kapsam 2: {c['kapsam2_t']} t, lojistik {c['lojistik_t']} t), "
-                     f"kaçınılan {c['kacinilan_t']} t. Anlık {c['anlik_th']} tCO2/saat.\n"
-                     "- En yüksek: " + ", ".join(f"{r['ad']} {r['co2_t']} t" for r in top) + "\n"
-                     f"- SKDM (CBAM) yıllık tahmini yük: ≈{_n(c['skdm_toplam_eur'])} € (≈{_tl(c['skdm_toplam_tl'])})")
-        parts.append("- Öneri: SKDM kapsamındaki döküm/metal tesislerinde atık ısıyı komşu tekstil ve gıdaya boru hattıyla ver; "
-                     "gaz yoğun fırınlarda puant dışı elektrifikasyon pilotu başlat.")
+        parts.append(f"**Carbon** — today {c['bugun_t']} tCO2 (scope 1: {c['kapsam1_t']} t, scope 2: {c['kapsam2_t']} t, logistics {c['lojistik_t']} t), "
+                     f"avoided {c['kacinilan_t']} t. Current rate {c['anlik_th']} tCO2/h.\n"
+                     "- Highest: " + ", ".join(f"{r['ad']} {r['co2_t']} t" for r in top) + "\n"
+                     f"- Estimated annual EU CBAM exposure: ≈€{_n(c['skdm_toplam_eur'])} (≈{_tl(c['skdm_toplam_tl'])})")
+        parts.append("- Recommendation: pipe waste heat from CBAM-exposed foundry/metal plants to neighbouring textile and food sites; "
+                     "start an off-peak electrification pilot on gas-intensive furnaces.")
 
-    if re.search(r"lojistik|kamyon|filo|sevkiyat|araç|kuyruk|kapı", ql):
+    if re.search(r"logistic|truck|fleet|shipment|delivery|vehicle|queue|gate", ql):
         d = w.logistics.detail()
-        parts.append(f"**Lojistik** — {d['aktif']}/{d['filo']} kamyon aktif, {d['bekleyen']} bekleyen sipariş, "
-                     f"bugün {d['bugun']['teslim']:.0f} teslimat, boş km oranı %{w.logistics.empty_ratio()*100:.0f}, "
-                     f"ortalama teslim {d['ort_teslim_dk']} dk. Ortak havuz: {'açık' if w.logistics.pool else 'kapalı'}.")
+        parts.append(f"**Logistics** — {d['aktif']}/{d['filo']} trucks active, {d['bekleyen']} orders waiting, "
+                     f"{d['bugun']['teslim']:.0f} deliveries today, empty-km share {w.logistics.empty_ratio()*100:.0f}%, "
+                     f"average lead time {d['ort_teslim_dk']} min. Shared pool: {'on' if w.logistics.pool else 'off'}.")
         if not w.logistics.pool:
-            parts.append("- Hemen: ortak filo havuzunu aç; araçlar depoya dönmeden en yakın işe geçer.")
+            parts.append("- Now: open the shared fleet pool; trucks take the nearest next job instead of driving back to the depot.")
 
-    if re.search(r"atık|atik|simbiyoz|geri dönüş|hurda|talaş|döngüsel", ql):
+    if re.search(r"waste|symbiosis|recycl|scrap|chips|circular", ql):
         sd = w.symbiosis.detail()
-        parts.append(f"**Endüstriyel simbiyoz** — {sum(1 for l in w.symbiosis.links if l['aktif'])} aktif bağlantı, "
-                     f"toplam kazanç {_tl(sd['toplam']['kazanc_tl'])}, yeniden kullanılan {sd['toplam']['geri_t']:.0f} t + {sd['toplam']['isi_mwh']:.0f} MWh ısı, "
-                     f"bertarafa giden {sd['toplam']['bertaraf_t']:.0f} t.")
+        parts.append(f"**Industrial symbiosis** — {sum(1 for l in w.symbiosis.links if l['aktif'])} active links, "
+                     f"total gain {_tl(sd['toplam']['kazanc_tl'])}, reused {sd['toplam']['geri_t']:.0f} t + {sd['toplam']['isi_mwh']:.0f} MWh of heat, "
+                     f"sent to disposal {sd['toplam']['bertaraf_t']:.0f} t.")
         for o in w.symbiosis.opps[:3]:
-            parts.append(f"- Fırsat: {o['ureten_ad']} → {o['alan_ad']} · {o['atik_ad']} · ayda ≈{_tl(o['aylik_kazanc_tl'])}, {o['aylik_co2_t']} tCO2")
+            parts.append(f"- Opportunity: {o['ureten_ad']} → {o['alan_ad']} · {o['atik_ad']} · ≈{_tl(o['aylik_kazanc_tl'])}/month, {o['aylik_co2_t']} tCO2")
 
-    if re.search(r"\bsu\b|arıtma|aritma|koi|atıksu", ql):
+    if re.search(r"\bwater\b|wastewater|treatment|\bcod\b", ql):
         wt = w.water
-        parts.append(f"**Su** — arıtmaya giriş {wt.inflow:.0f} m³/saat (kapasite {wt.capacity_m3h}), yüklenme %{wt.util*100:.0f}, "
-                     f"çıkış KOİ {wt.koi_out:.0f} mg/L (sınır 250), geri kazanım %{wt.reuse*100:.0f}.")
+        parts.append(f"**Water** — plant inflow {wt.inflow:.0f} m³/h (capacity {wt.capacity_m3h}), load {wt.util*100:.0f}%, "
+                     f"outlet COD {wt.koi_out:.0f} mg/L (limit 250), reuse {wt.reuse*100:.0f}%.")
         if wt.reuse < 0.25:
-            parts.append("- Öneri: geri kazanımı %25'e çıkar; soğutma kulesi takviye suyu için uygundur.")
+            parts.append("- Recommendation: raise reuse to 25%; it is suitable as cooling-tower make-up water.")
 
-    if re.search(r"arıza|ariza|olay|alarm|kriz|yangın|acil|isg|güvenlik", ql):
+    if re.search(r"fault|incident|alarm|crisis|fire|emergency|safety|ohs", ql):
         o = w.incidents.open()
         if o:
-            parts.append("**Açık olaylar**\n" + "\n".join(f"- [{i['seviye']}] {i['baslik']} {('— ' + i['fabrika_ad']) if i['fabrika_ad'] else ''}: "
-                                                         f"{i['aksiyonlar'][0] if i['aksiyonlar'] else ''}" for i in o[:6]))
+            parts.append("**Open incidents**\n" + "\n".join(f"- [{SEV_EN.get(i['seviye'], i['seviye'])}] {i['baslik']} {('— ' + i['fabrika_ad']) if i['fabrika_ad'] else ''}: "
+                                                           f"{i['aksiyonlar'][0] if i['aksiyonlar'] else ''}" for i in o[:6]))
         else:
-            parts.append("**Olaylar** — şu an açık olay yok.")
+            parts.append("**Incidents** — no open incidents right now.")
 
-    if not parts or re.search(r"özet|durum|ne yapmal|öneri|tavsiye|brifing|rapor|nasıl gidiyor", ql):
+    if not parts or re.search(r"summary|status|overview|what should|recommend|advice|brief|report|how is|how are", ql):
         h = w.health()
-        parts.insert(0, f"**Bölge özeti · Gün {w.day} {w.clock()}** — sağlık skoru **{h['skor']}/100**. "
-                        f"Yük {k['guc_mw']} MW, vardiyada {_n(k['vardiyada'])} kişi, saatlik üretim değeri ≈{_tl(k['uretim_saat_tl'])}, "
-                        f"bugün {k['co2_t']} tCO2, {k['kamyon']} kamyon yolda.")
+        parts.insert(0, f"**Zone summary · day {w.day} {w.clock()}** — health score **{h['skor']}/100**. "
+                        f"Load {k['guc_mw']} MW, {_n(k['vardiyada'])} people on shift, hourly output value ≈{_tl(k['uretim_saat_tl'])}, "
+                        f"{k['co2_t']} tCO2 today, {k['kamyon']} trucks on the road.")
         weak = sorted(h["parcalar"].items(), key=lambda x: x[1])[:2]
-        parts.append("- Zayıf alanlar: " + ", ".join(f"{a} {b}" for a, b in weak))
+        parts.append("- Weakest areas: " + ", ".join(f"{PART_EN.get(a, a)} {b}" for a, b in weak))
         for i in w.insights[:4]:
             parts.append(f"- {i['baslik']}: {i['metin']}")
-    parts.append("\n_Yerel analist yanıtı — Ollama bağlandığında Bölge Beyni serbest sorulara da yanıt verir._")
+    parts.append("\n_Local analyst answer — once Ollama is connected, the Zone Brain also answers free-form questions._")
     return "\n".join(parts)

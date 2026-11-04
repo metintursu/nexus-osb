@@ -1,7 +1,7 @@
-"""Köprü: başka bir sistemin (Fabrika OS, SCADA, PLC ağ geçidi) JSON API'sini düzenli okuyup bir NEXUS tesisine akıtır.
+"""Bridge: periodically reads another system's JSON API (Fabrika OS, SCADA, a PLC gateway) and feeds it into a NEXUS site.
 
-Her köprü: URL + hedef tesis + alan eşlemesi (noktalı yol: "makineler.0.guc_kw") + çarpan + durum eşlemesi.
-Sihirbaz önce URL'yi deneyip tüm yaprak alanları listeler; kullanıcı hangisinin güç, durum, OEE, üretim olduğunu seçer."""
+Each bridge: URL + target site + field mapping (dotted path: "machines.0.power_kw") + multiplier + status mapping.
+The wizard first probes the URL and lists every leaf field; the user picks which one is power, status, OEE and output."""
 import time
 import uuid
 
@@ -50,7 +50,7 @@ def pick(obj, path):
 
 
 def suggest(flat):
-    """Alan adlarından güç/durum/OEE/üretim için tahmini eşleme önerir."""
+    """Suggests a likely mapping for power/status/OEE/output from field names."""
     sug = {}
     for path, v in flat.items():
         p = path.lower()
@@ -136,9 +136,9 @@ class Bridges:
                     r.raise_for_status()
                     vals = self.convert(b, r.json())
                     if not any(k in vals for k in FIELDS):
-                        raise ValueError("Eşlenen alanlardan hiçbiri yanıtta bulunamadı")
+                        raise ValueError("None of the mapped fields were found in the response")
                     if not apply(b["fabrika"], vals):
-                        raise ValueError(f"NEXUS tesisi bulunamadı: {b['fabrika']}")
+                        raise ValueError(f"NEXUS site not found: {b['fabrika']}")
                     b.update(durum="ok", hata=None, son=time.strftime("%H:%M:%S"), son_deger=vals, mesaj=b["mesaj"] + 1)
                 except Exception as e:  # noqa: BLE001
                     b.update(durum="hata", hata=f"{type(e).__name__}: {str(e)[:160]}")

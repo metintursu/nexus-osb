@@ -1,55 +1,55 @@
 import { $, esc, fmt } from "../ui.js";
 
 const EP = [
-  ["GET", "/api/canli", "Tüm bölgenin anlık durumu (WebSocket ile aynı veri)"], ["GET", "/api/dunya", "Harita, tesisler, sektörler, atık türleri"],
-  ["GET", "/api/fabrikalar/{id}", "Tesis ayrıntısı, geçmiş, simbiyoz, olaylar"], ["POST", "/api/veri/{id}", "Gerçek tesisten canlı veri gönder"],
-  ["GET", "/api/enerji", "Şebeke, GES, batarya, trafolar"], ["POST", "/api/enerji/ayar", "{mod, dr_aktif, rezerv}"],
-  ["GET", "/api/lojistik", "Filo, siparişler, kapılar"], ["GET", "/api/simbiyoz", "Bağlantılar ve fırsatlar"], ["GET", "/api/karbon", "Kapsam 1-2, SKDM"],
-  ["GET", "/api/su", "Arıtma"], ["GET", "/api/olaylar", "Olay kaydı"], ["POST", "/api/senaryolar/{anahtar}/baslat", "Stres testi"],
-  ["POST", "/api/beyin/sohbet", "{mesaj} → Bölge Beyni yanıtı veya komut"], ["POST", "/api/otopilot", "{aktif} otopilotu aç/kapat"],
-  ["GET", "/api/muzakere", "Ajan mesajları, masalar, OSB Kredisi"], ["GET", "/api/ustalar", "Usta havuzu"], ["GET", "/api/hidrojen", "Hidrojen Vadisi"],
-  ["GET", "/api/tahmin", "24 saat Monte Carlo tahmin"], ["POST", "/api/evrenler", "{a, b, gun} paralel evren karşılaştırması"], ["GET", "/api/afet", "Aktif afet ve rüzgâr"], ["GET", "/api/gercek", "Fiyat, hava, köprü, kalibrasyon durumu"],
-  ["POST", "/api/kopru", "Köprü ekle (url, fabrika, alanlar)"], ["POST", "/api/kalibrasyon/{id}?uygula=true", "Geçmiş veri dosyası (gövde) ile kalibrasyon"],
-  ["POST", "/api/bolge", "Bölge planı (JSON) uygula"], ["POST", "/api/sim/esitle", "Simülasyon saatini gerçek saate eşitle"], ["GET", "/api/raporlar", "Gün sonu raporları"], ["WS", "/ws", "Saniyelik canlı yayın"],
+  ["GET", "/api/canli", "Live state of the whole zone (same data as the WebSocket)"], ["GET", "/api/dunya", "Map, sites, sectors, waste types"],
+  ["GET", "/api/fabrikalar/{id}", "Site details, history, symbiosis, incidents"], ["POST", "/api/veri/{id}", "Push live data from a real site"],
+  ["GET", "/api/enerji", "Grid, solar, battery, substations"], ["POST", "/api/enerji/ayar", "{mod, dr_aktif, rezerv}"],
+  ["GET", "/api/lojistik", "Fleet, orders, gates"], ["GET", "/api/simbiyoz", "Links and opportunities"], ["GET", "/api/karbon", "Scope 1-2, CBAM"],
+  ["GET", "/api/su", "Wastewater plant"], ["GET", "/api/olaylar", "Incident log"], ["POST", "/api/senaryolar/{key}/baslat", "Stress test"],
+  ["POST", "/api/beyin/sohbet", "{mesaj} → Zone Brain reply or command"], ["POST", "/api/otopilot", "{aktif} turn autopilot on/off"],
+  ["GET", "/api/muzakere", "Agent messages, tables, Zone Credits"], ["GET", "/api/ustalar", "Technician pool"], ["GET", "/api/hidrojen", "Hydrogen Valley"],
+  ["GET", "/api/tahmin", "24-hour Monte Carlo forecast"], ["POST", "/api/evrenler", "{a, b, gun} parallel universe comparison"], ["GET", "/api/afet", "Active disaster and wind"], ["GET", "/api/gercek", "Price, weather, bridge, calibration status"],
+  ["POST", "/api/kopru", "Add a bridge (url, factory, fields)"], ["POST", "/api/kalibrasyon/{id}?uygula=true", "Calibrate with a history file (request body)"],
+  ["POST", "/api/bolge", "Apply a zone plan (JSON)"], ["POST", "/api/sim/esitle", "Sync the simulation clock to real time"], ["GET", "/api/raporlar", "End-of-day reports"], ["WS", "/ws", "Live stream every second"],
 ];
 
 export default {
   mount(root, ctx) {
     root.innerHTML = `<div class="grid g2" style="margin-bottom:var(--gap)">
-      <a class="card item click" href="#/veri" style="color:inherit"><h3>🌐 Gerçek Veri</h3><div class="muted mt" style="font-size:13px">EPİAŞ PTF elektrik fiyatı, gerçek hava durumu, geçmiş veriyle tesis kalibrasyonu ve <b>Fabrika OS köprüsü</b> (alan eşleme sihirbazıyla, kod yazmadan).</div></a>
-      <a class="card item click" href="#/tasarim" style="color:inherit"><h3>📐 Bölge Tasarımcısı</h3><div class="muted mt" style="font-size:13px">Kendi OSB'nin ada ızgarasını, ortak tesislerini ve fabrikalarını çiz; JSON olarak kaydet, paylaş, tek tıkla kur.</div></a></div>
+      <a class="card item click" href="#/veri" style="color:inherit"><h3>🌐 Real Data</h3><div class="muted mt" style="font-size:13px">EPİAŞ day-ahead electricity price (Turkey), real weather, site calibration from historical data and the <b>Fabrika OS bridge</b> (with a field-mapping wizard, no code needed).</div></a>
+      <a class="card item click" href="#/tasarim" style="color:inherit"><h3>📐 Zone Designer</h3><div class="muted mt" style="font-size:13px">Draw your own zone's block grid, shared facilities and factories; save it as JSON, share it and build it with one click.</div></a></div>
     <div class="grid g2">
-      <div class="card"><div class="card-h"><h3>1 · REST ile tesis bağla</h3><span class="sub">PLC ağ geçidi, SCADA, Fabrika OS</span></div>
-        <div class="muted" style="font-size:13px">Bir tesisin simüle edilen değerlerini gerçek ölçümle değiştir. Veri <b>gecerlilik_dk</b> boyunca geçerlidir; yenilenmezse tesis simülasyona döner. Haritada kırmızı nokta = canlı veri.</div>
+      <div class="card"><div class="card-h"><h3>1 · Connect a site over REST</h3><span class="sub">PLC gateway, SCADA, Fabrika OS</span></div>
+        <div class="muted" style="font-size:13px">Replace a site's simulated values with real measurements. Data stays valid for <b>gecerlilik_dk</b> minutes; if it is not refreshed, the site falls back to simulation. A red dot on the map = live data.</div>
         <div class="muted mt" style="font-size:12px">PowerShell</div>
         <div class="code">Invoke-RestMethod -Method Post -Uri http://localhost:8080/api/veri/F01 \`
   -ContentType "application/json" \`
   -Body '{"power_kw": 1850, "durum": "calisiyor", "oee": 0.83, "uretim_dk": 9.5, "gecerlilik_dk": 15}'</div>
-        <div class="muted mt" style="font-size:12px">Alanlar</div>
-        <div class="code">power_kw     anlık elektrik gücü (kW)
-durum        calisiyor | bosta | ariza | bakim | durdu
-oee          0–1 arası ekipman etkinliği
-uretim_dk    dakikadaki üretim (tesis biriminde)
-gecerlilik_dk  verinin geçerli kalacağı dakika (varsayılan 15)</div></div>
-      <div class="card"><div class="card-h"><h3>2 · MQTT ile akış</h3><span class="sub" id="mq"></span></div>
-        <div class="muted" style="font-size:13px">docker-compose içindeki Mosquitto aracısı açıkken NEXUS şu konuyu dinler ve her 10 dakikada bölge KPI'larını yayınlar:</div>
-        <div class="code mt">abone:  nexus/fabrika/{id}/telemetri   → aynı JSON gövdesi
-yayın:  nexus/bolge/kpi                 → bölge göstergeleri</div>
-        <div class="muted mt" style="font-size:12px">Deneme (PowerShell, Mosquitto istemcisi ile)</div>
+        <div class="muted mt" style="font-size:12px">Fields</div>
+        <div class="code">power_kw       current electrical power (kW)
+durum          status: calisiyor (running) | bosta (idle) | ariza (fault) | bakim (maintenance) | durdu (stopped)
+oee            overall equipment effectiveness, 0–1
+uretim_dk      output per minute (in the site's unit)
+gecerlilik_dk  minutes the data stays valid (default 15)</div></div>
+      <div class="card"><div class="card-h"><h3>2 · Stream over MQTT</h3><span class="sub" id="mq"></span></div>
+        <div class="muted" style="font-size:13px">When the Mosquitto broker in docker-compose is running, NEXUS subscribes to this topic and publishes zone KPIs every 10 minutes:</div>
+        <div class="code mt">subscribe:  nexus/fabrika/{id}/telemetri   → same JSON body
+publish:    nexus/bolge/kpi                 → zone indicators</div>
+        <div class="muted mt" style="font-size:12px">Try it (PowerShell, with the Mosquitto client)</div>
         <div class="code">docker exec nexus-mqtt mosquitto_pub -t nexus/fabrika/F02/telemetri \`
   -m '{\\"power_kw\\": 2400, \\"durum\\": \\"ariza\\"}'</div>
         <div class="hr"></div>
-        <div class="card-h"><h3>3 · Fabrika OS köprüsü</h3></div>
-        <div class="muted" style="font-size:13px">Fabrika OS'ta çalışan her tesis, kendi enerji ve durum verisini bu uca göndererek bölge seviyesine katılır. Böylece tek fabrikanın işletim sistemi, NEXUS'ta bölgenin bir hücresi olur; Dijital Usta arıza önerileri ve Karbon Pasaportu verileri bölge karbon defterine akar.</div></div></div>
+        <div class="card-h"><h3>3 · Fabrika OS bridge</h3></div>
+        <div class="muted" style="font-size:13px">Every site running Fabrika OS joins the zone level by sending its own energy and status data to this endpoint. The single-factory operating system becomes one cell of the zone in NEXUS; Dijital Usta fault advice and Karbon Pasaportu data flow into the zone carbon ledger.</div></div></div>
     <div class="grid mt g2">
-      <div class="card"><div class="card-h"><h3>API uçları</h3><span class="sub"><a href="/docs" target="_blank">Etkileşimli dokümantasyon (Swagger) →</a></span></div>
+      <div class="card"><div class="card-h"><h3>API endpoints</h3><span class="sub"><a href="/docs" target="_blank">Interactive documentation (Swagger) →</a></span></div>
         <div class="tbl-wrap"><table class="tbl">${EP.map(([m, p, d]) => `<tr><td><span class="tag" style="color:${m === "GET" ? "#34d399" : m === "POST" ? "#fbbf24" : "#a78bfa"}">${m}</span></td><td class="num">${esc(p)}</td><td class="muted">${esc(d)}</td></tr>`).join("")}</table></div></div>
-      <div class="card"><div class="card-h"><h3>Sistem</h3></div><div id="sys" class="grid g2" style="font-size:13px"></div></div></div>`;
+      <div class="card"><div class="card-h"><h3>System</h3></div><div id="sys" class="grid g2" style="font-size:13px"></div></div></div>`;
     ctx.poll(async () => {
       const s = await ctx.api("/sim");
-      $("#mq").textContent = s.mqtt.host ? (s.mqtt.aktif ? `bağlı · ${s.mqtt.mesaj} mesaj` : "bağlanıyor…") : "kapalı (MQTT_HOST tanımlı değil)";
-      $("#sys").innerHTML = [["Simülasyon zamanı", `Gün ${s.gun} · ${s.saat}`], ["Hız", s.duraklatildi ? "duraklatıldı" : `${s.tps}× (dk/sn)`], ["Bu oturumda adım", fmt.n(s.adim)],
-        ["Kalıcı olay kaydı", fmt.n(s.kayit) + " satır (SQLite)"], ["Tesis", ctx.world.fabrikalar.length], ["Araç", `${ctx.world.filo} kamyon + 1 itfaiye + ${ctx.world.ustalar.length} usta`]]
+      $("#mq").textContent = s.mqtt.host ? (s.mqtt.aktif ? `connected · ${s.mqtt.mesaj} messages` : "connecting…") : "off (MQTT_HOST not set)";
+      $("#sys").innerHTML = [["Simulation time", `Day ${s.gun} · ${s.saat}`], ["Speed", s.duraklatildi ? "paused" : `${s.tps}× (min/s)`], ["Steps this session", fmt.n(s.adim)],
+        ["Persistent event log", fmt.n(s.kayit) + " rows (SQLite)"], ["Sites", ctx.world.fabrikalar.length], ["Vehicles", `${ctx.world.filo} trucks + 1 fire engine + ${ctx.world.ustalar.length} technicians`]]
         .map(([k, v]) => `<div class="item"><div class="muted">${k}</div><b>${v}</b></div>`).join("");
     }, 5000);
   },

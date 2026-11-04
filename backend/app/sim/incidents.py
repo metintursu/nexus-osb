@@ -1,21 +1,21 @@
-"""Kriz ve olay yönetimi: arıza, yangın, İSG ramak kala, modüllerden gelen alarmlar."""
+"""Crisis and incident management: faults, fires, OHS near-misses and alarms raised by other modules."""
 
 FAULTS = [
-    ("Ana tahrik motoru aşırı titreşim", "mekanik", ["Rulman sıcaklığını ölç; titreşim 7 mm/s üstündeyse rulmanı değiştir",
-                                          "Kaplin hizasını lazerle kontrol et", "Motor ankraj cıvatalarını torkla"]),
-    ("Hidrolik basınç düşüşü", "hidrolik", ["Filtre fark basıncını kontrol et", "Pompa emiş hattında hava kaçağı ara",
-                                "Yağ seviyesini ve sıcaklığını kontrol et"]),
-    ("Kompresör hattında hava kaçağı", "hidrolik", ["Ultrasonik dedektörle kaçak tara", "Kaçak noktasını izole et, yedek hattı aç",
-                                        "Bölge pazaryerinden geçici kompresör kirala"]),
-    ("Servo sürücü aşırı akım hatası", "elektrik", ["Sürücü hata geçmişini oku", "Motor kablosunda izolasyon testi yap",
-                                        "Mekanik sıkışma için eksenleri elle kontrol et"]),
-    ("Soğutma suyu sıcaklığı yüksek", "sogutma", ["Kule fanlarını ve pompa debisini kontrol et", "Eşanjör kirlenmesine bak",
-                                       "Üretim hızını geçici %20 düşür"]),
-    ("Konveyör bant kayması", "mekanik", ["Bant gerginliğini ayarla", "Tambur kaplamasını kontrol et", "Hız sensörünü test et"]),
-    ("Fırın brülörü alev sönmesi", "yakma", ["Alev sensörünü temizle", "Gaz basınç regülatörünü kontrol et",
-                                    "Purge döngüsünü tamamlayıp yeniden ateşle"]),
-    ("PLC haberleşme kopması", "otomasyon", ["Switch port durumlarını kontrol et", "PLC CPU durum LED'lerini oku",
-                                "Son değişiklik yapılan programı geri al"]),
+    ("Main drive motor excessive vibration", "mekanik", ["Measure bearing temperature; replace the bearing if vibration exceeds 7 mm/s",
+                                          "Laser-check coupling alignment", "Torque the motor anchor bolts"]),
+    ("Hydraulic pressure drop", "hidrolik", ["Check filter differential pressure", "Look for an air leak on the pump suction line",
+                                "Check oil level and temperature"]),
+    ("Compressed-air line leak", "hidrolik", ["Scan for leaks with an ultrasonic detector", "Isolate the leak and open the backup line",
+                                        "Rent a temporary compressor via the zone marketplace"]),
+    ("Servo drive overcurrent fault", "elektrik", ["Read the drive fault history", "Insulation-test the motor cable",
+                                        "Check the axes by hand for mechanical binding"]),
+    ("Cooling water temperature high", "sogutma", ["Check cooling tower fans and pump flow", "Inspect the heat exchanger for fouling",
+                                       "Temporarily cut line speed by 20%"]),
+    ("Conveyor belt slipping", "mekanik", ["Adjust belt tension", "Check the drum lagging", "Test the speed sensor"]),
+    ("Furnace burner flame-out", "yakma", ["Clean the flame sensor", "Check the gas pressure regulator",
+                                    "Complete the purge cycle and re-ignite"]),
+    ("PLC communication loss", "otomasyon", ["Check switch port status", "Read the PLC CPU status LEDs",
+                                "Roll back the most recently changed program"]),
 ]
 
 
@@ -24,7 +24,7 @@ class Incidents:
         self.w = w
         self.items = []
         self._n = 0
-        self.keys = {}       # key -> açık olay id
+        self.keys = {}       # key -> open incident id
 
     def _new(self, tip, baslik, seviye, fabrika=None, detay="", aksiyonlar=None, key=None):
         self._n += 1
@@ -32,13 +32,13 @@ class Incidents:
         inc = {"id": f"O{self._n:05d}", "tip": tip, "baslik": baslik, "seviye": seviye,
                "fabrika": fabrika, "fabrika_ad": f.ad if f else None, "x": f.cx if f else None, "y": f.cy if f else None,
                "zaman": self.w.minute, "durum": "acik", "detay": detay, "aksiyonlar": aksiyonlar or [],
-               "kayit": [(self.w.minute, "Olay açıldı")], "key": key, "kapanis": None}
+               "kayit": [(self.w.minute, "Incident opened")], "key": key, "kapanis": None}
         self.items.append(inc)
         if key:
             self.keys[key] = inc["id"]
         if len(self.items) > 400:
             self.items = [i for i in self.items if i["durum"] != "kapandi"][-200:] + []
-        self.w.log("olay", f"[{seviye.upper()}] {baslik}" + (f" — {f.ad}" if f else ""), inc)
+        self.w.log("olay", f"[{dict(kritik='CRITICAL', uyari='WARNING', bilgi='INFO').get(seviye, seviye.upper())}] {baslik}" + (f" — {f.ad}" if f else ""), inc)
         return inc
 
     def get(self, iid):
@@ -78,12 +78,12 @@ class Incidents:
             return None
         if act == "mudahale" and inc["durum"] == "acik":
             inc["durum"] = "mudahale"
-            inc["kayit"].append((self.w.minute, "Operatör müdahaleyi başlattı"))
+            inc["kayit"].append((self.w.minute, "Operator started the response"))
         elif act == "kapat":
-            self.close(inc, "Operatör tarafından kapatıldı")
+            self.close(inc, "Closed by operator")
         return inc
 
-    # ---------------- olay üretimi ----------------
+    # ---------------- incident generation ----------------
     def tick(self):
         w, rng = self.w, self.w.rng
         for f in w.factories:
@@ -92,60 +92,60 @@ class Incidents:
             if rng.random() < 1 / (1440 * 3.2):
                 name, skill, steps = rng.choice(FAULTS)
                 dur = rng.randint(25, 110)
-                inc = self._new("ariza", name, "uyari", f.id, f"Tahmini duruş {dur} dk",
-                                ["Dijital Usta önerisi: " + steps[0]] + steps[1:], key=f"ariza:{f.id}")
+                inc = self._new("ariza", name, "uyari", f.id, f"Estimated downtime {dur} min",
+                                ["Digital Master advice: " + steps[0]] + steps[1:], key=f"ariza:{f.id}")
                 f.set_fault("ariza", w.minute + dur, name, inc["id"])
                 w.masters.dispatch(f, skill, inc)
             elif rng.random() < 1 / (1440 * 9):
                 dur = rng.randint(40, 120)
-                inc = self._new("bakim", "Planlı kestirimci bakım", "bilgi", f.id,
-                                f"Model titreşim trendine göre bakım öne çekildi · {dur} dk",
-                                ["Yedek parçaları hazırla", "Bakım sonrası deneme üretimi"], key=f"bakim:{f.id}")
-                f.set_fault("bakim", w.minute + dur, "Planlı bakım", inc["id"])
+                inc = self._new("bakim", "Planned predictive maintenance", "bilgi", f.id,
+                                f"Maintenance brought forward based on the vibration trend · {dur} min",
+                                ["Prepare spare parts", "Trial run after maintenance"], key=f"bakim:{f.id}")
+                f.set_fault("bakim", w.minute + dur, "Planned maintenance", inc["id"])
         if rng.random() < 1 / (1440 * 3.5):
             cand = [f for f in w.factories if f.status == "calisiyor" and not f.fault]
             if cand and w.logistics.emergency.state == "bos":
                 f = rng.choice(cand)
-                inc = self._new("yangin", "Yangın alarmı", "kritik", f.id, "Duman dedektörü + ısı sensörü teyitli",
-                                ["Tesis tahliye planını başlat", "OSB itfaiyesi yönlendirildi",
-                                 "Komşu tesislere bilgi ver, doğalgaz vanasını kapat"], key=f"yangin:{f.id}")
-                f.set_fault("durdu", w.minute + 600, "Yangın alarmı — tahliye", inc["id"])
+                inc = self._new("yangin", "Fire alarm", "kritik", f.id, "Confirmed by smoke detector + heat sensor",
+                                ["Start the site evacuation plan", "Zone fire brigade dispatched",
+                                 "Notify neighbouring sites, close the gas valve"], key=f"yangin:{f.id}")
+                f.set_fault("durdu", w.minute + 600, "Fire alarm — evacuation", inc["id"])
                 w.logistics.dispatch_emergency(f, inc["id"])
-                inc["kayit"].append((w.minute, "İtfaiye aracı ITF-1 yola çıktı"))
+                inc["kayit"].append((w.minute, "Fire engine FIRE-1 dispatched"))
         if rng.random() < 1 / (1440 * 1.2):
             cand = [f for f in w.factories if f.status == "calisiyor"]
             if cand:
                 f = rng.choice(cand)
-                inc = self._new("isg", "İSG ramak kala bildirimi", "bilgi", f.id,
-                                rng.choice(["Forklift yaya geçidinde ani fren", "Pres koruma kapağı açık çalıştırma",
-                                            "Kimyasal etiket eksikliği", "Yüksekte çalışmada emniyet kemeri eksik"]),
-                                ["Kök neden analizi (5 Neden)", "Ekip toplantısında paylaş"])
+                inc = self._new("isg", "OHS near-miss report", "bilgi", f.id,
+                                rng.choice(["Forklift hard braking at a pedestrian crossing", "Press operated with the guard open",
+                                            "Missing chemical label", "Working at height without a harness"]),
+                                ["Root-cause analysis (5 Whys)", "Share at the team briefing"])
                 inc["oto_kapat"] = w.minute + 45
-        # otomatik kapanışlar
+        # automatic closures
         for inc in self.items:
             if inc["durum"] == "kapandi":
                 continue
             if inc["tip"] in ("ariza", "bakim"):
                 f = w.fmap.get(inc["fabrika"])
                 if f and (not f.fault or f.fault[3] != inc["id"]):
-                    self.close(inc, "Ekipman yeniden devrede")
+                    self.close(inc, "Equipment back in service")
             elif inc.get("oto_kapat") and w.minute >= inc["oto_kapat"]:
-                self.close(inc, "Aksiyon kaydı tamamlandı")
+                self.close(inc, "Action record completed")
 
     def on_emergency_arrival(self, iid, f):
         inc = self.get(iid)
         if inc:
             inc["durum"] = "mudahale"
-            inc["kayit"].append((self.w.minute, "İtfaiye olay yerinde, müdahale başladı"))
+            inc["kayit"].append((self.w.minute, "Fire brigade on site, response under way"))
 
     def on_emergency_done(self, iid, f):
         inc = self.get(iid)
         if inc:
-            self.close(inc, "Yangın kontrol altında; tesis 60 dk sonra kademeli devreye girecek")
+            self.close(inc, "Fire under control; the site will restart gradually in 60 min")
             if f.fault and f.fault[3] == iid:
-                f.set_fault("durdu", self.w.minute + 60, "Yangın sonrası güvenlik kontrolü", None)
+                f.set_fault("durdu", self.w.minute + 60, "Post-fire safety check", None)
 
-    # ---------------- çıktı ----------------
+    # ---------------- output ----------------
     def open(self):
         return [i for i in self.items if i["durum"] != "kapandi"]
 

@@ -1,4 +1,4 @@
-"""Excel/CSV okuyucu: Türkçe sayı ve tarih biçimlerini anlar (1.234,56 · 04.11.2026 13:00)."""
+"""Excel/CSV reader: understands both English and Turkish number/date formats (1,234.56 · 1.234,56 · 2026-11-04 13:00 · 04.11.2026 13:00)."""
 import csv
 import io
 import re
@@ -24,7 +24,8 @@ def num(v):
     if "," in s and "." in s:
         s = s.replace(".", "").replace(",", ".") if s.rfind(",") > s.rfind(".") else s.replace(",", "")
     elif "," in s:
-        s = s.replace(",", ".")
+        # 1,234 / 12,345,678 → English thousands separators; 2,5 → Turkish decimal comma
+        s = s.replace(",", "") if re.fullmatch(r"-?\d{1,3}(,\d{3})+", s) else s.replace(",", ".")
     s = re.sub(r"[^0-9.\-eE]", "", s)
     try:
         return float(s)
@@ -66,7 +67,7 @@ def dt(v, saat=None):
 
 
 def read(name, raw):
-    """Dosyayı [{normalize_baslik: değer}] satırlarına çevirir."""
+    """Turns the file into rows of {normalised_header: value}."""
     name = (name or "").lower()
     if name.endswith((".xlsx", ".xlsm")):
         from openpyxl import load_workbook
@@ -74,7 +75,7 @@ def read(name, raw):
         ws = wb.worksheets[0]
         grid = [list(r) for r in ws.iter_rows(values_only=True)]
     elif name.endswith(".xls"):
-        raise ValueError("Eski .xls biçimi desteklenmiyor; Excel'de 'Farklı Kaydet → .xlsx' ile kaydedip yükle")
+        raise ValueError("The old .xls format is not supported; use 'Save As → .xlsx' in Excel and upload again")
     else:
         text = None
         for enc in ("utf-8-sig", "cp1254", "latin-1"):
@@ -93,7 +94,7 @@ def read(name, raw):
             hi = i
             break
     if hi is None:
-        raise ValueError("Başlık satırı bulunamadı (ilk satırda sütun adları olmalı)")
+        raise ValueError("No header row found (the first row must contain column names)")
     heads = [norm(h) for h in grid[hi]]
     rows = []
     for r in grid[hi + 1:]:
@@ -101,7 +102,7 @@ def read(name, raw):
             continue
         rows.append({heads[j]: r[j] for j in range(min(len(heads), len(r))) if heads[j]})
     if not rows:
-        raise ValueError("Dosyada veri satırı yok")
+        raise ValueError("The file has no data rows")
     return rows
 
 
@@ -115,10 +116,10 @@ def find(heads, *keys, avoid=()):
 
 def stamps(rows):
     heads = list(rows[0].keys())
-    tc = find(heads, "tarih_saat", "zaman", "tarih", "date", "time", "donem", "ay")
+    tc = find(heads, "datetime", "timestamp", "tarih_saat", "zaman", "tarih", "date", "time", "period", "month", "donem", "ay")
     sc = find(heads, "saat", "hour", avoid=("tarih",)) if tc != find(heads, "saat") else None
     if not tc:
-        raise ValueError("Tarih sütunu bulunamadı (ör. 'Tarih' veya 'Zaman')")
+        raise ValueError("No date column found (e.g. 'Date' or 'Time')")
     out = []
     for r in rows:
         d = dt(r.get(tc), r.get(sc) if sc else None)
@@ -142,11 +143,11 @@ def price_days(rows):
 
 
 def template_csv():
-    lines = ["tarih;saat;kwh;uretim;gaz_m3;su_m3"]
+    lines = ["date,hour,kwh,output,gas_m3,water_m3"]
     base = datetime(2026, 10, 6)
     for i in range(48):
         d = base + timedelta(hours=i)
         work = 6 <= d.hour < 22
         kwh = 1450 if work else 260
-        lines.append(f"{d:%d.%m.%Y};{d:%H}:00;{kwh};{620 if work else 0};{140 if work else 15};{14 if work else 4}")
+        lines.append(f"{d:%Y-%m-%d},{d:%H}:00,{kwh},{620 if work else 0},{140 if work else 15},{14 if work else 4}")
     return "\n".join(lines) + "\n"

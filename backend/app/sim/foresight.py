@@ -1,23 +1,23 @@
-"""Öngörü: bölgenin kopyalarını ileri sararak gelecek tahmini ve paralel evren karşılaştırması.
+"""Foresight: fast-forwarding copies of the zone for forecasts and parallel-universe comparisons.
 
-Tahmin  — mevcut durumun N kopyası farklı rastlantı tohumlarıyla 24 saat ileri koşar (Monte Carlo);
-          saatlik ortalama, p10/p90 bandı ve trafo aşırı yük olasılığı çıkar.
-Evrenler — aynı başlangıçtan iki kopya, farklı politikalarla günlerce koşar; sonuçlar yan yana."""
+Forecast  — N copies of the current state run 24 hours ahead with different random seeds (Monte Carlo);
+            yields hourly means, a p10/p90 band and substation overload probabilities.
+Universes — two copies from the same starting point run for days under different policies; results side by side."""
 import copy
 import time
 
-MARGIN = 0.12      # ciro değişiminin kâra yansıması için varsayılan brüt marj
+MARGIN = 0.12      # default gross margin used to turn revenue change into profit
 
 POLICIES = {
-    "mevcut": {"ad": "Bugünkü ayarlar", "aciklama": "Şu anki ayarlar olduğu gibi"},
-    "klasik": {"ad": "Klasik OSB", "aciklama": "Batarya kapalı, talep kaydırma yok, ajanlar yok, ortak havuz yok, simbiyoz yok, H2 yok, su geri kazanımı %0, otopilot kapalı",
+    "mevcut": {"ad": "Current settings", "aciklama": "Today's settings as they are"},
+    "klasik": {"ad": "Classic zone", "aciklama": "Battery off, no demand response, no agents, no shared fleet, no symbiosis, no H2, 0% water reuse, autopilot off",
                "bess": "kapali", "dr": False, "havuz": False, "su": 0.0, "otopilot": False, "simbiyoz_kapat": True, "h2": False, "ajan": False,
                "ajan_kapali": True},
-    "otopilot": {"ad": "NEXUS Otopilot", "aciklama": "Otopilot ve tüm kuralları açık; ajanlar otonom",
+    "otopilot": {"ad": "NEXUS Autopilot", "aciklama": "Autopilot with all rules on; agents autonomous",
                  "bess": "otomatik", "dr": True, "otopilot": True, "ajan": True, "h2": True},
-    "yesil": {"ad": "Yeşil maksimum", "aciklama": "Otopilot + su %40 + H2 + tüm uygun simbiyozlar baştan kurulur",
+    "yesil": {"ad": "Max green", "aciklama": "Autopilot + 40% water reuse + H2 + every viable symbiosis link set up from the start",
               "bess": "otomatik", "dr": True, "havuz": True, "su": 0.40, "otopilot": True, "ajan": True, "h2": True, "simbiyoz_hepsi": True},
-    "tasarruf": {"ad": "Yalnız enerji tasarrufu", "aciklama": "Batarya + talep kaydırma açık; lojistik ve döngüsellik dokunulmaz",
+    "tasarruf": {"ad": "Energy savings only", "aciklama": "Battery + demand response on; logistics and circularity untouched",
                  "bess": "otomatik", "dr": True, "otopilot": False},
 }
 
@@ -30,7 +30,7 @@ def clone(w):
     finally:
         w.logger, w.on_day = hooks
     c.events = []
-    for r in c.agents.rooms:          # bekleyen pazarlık geri çağrıları asıl dünyaya bağlı; kopyada iptal
+    for r in c.agents.rooms:          # pending negotiation callbacks belong to the real world; cancel them in the copy
         if r["durum"] == "suruyor":
             r["script"], r["durum"] = [], "basarisiz"
     return c
@@ -162,9 +162,9 @@ def forecast(snapshots, hours=24):
     for row in out:
         for k, p in enumerate(row["tm_risk"]):
             if p >= 0.3:
-                alerts.append({"t": row["t"], "metin": f"TM-{k+1} aşırı yük olasılığı %{p*100:.0f}", "seviye": "kritik" if p >= 0.6 else "uyari"})
+                alerts.append({"t": row["t"], "metin": f"TM-{k+1} overload probability {p*100:.0f}%", "seviye": "kritik" if p >= 0.6 else "uyari"})
         if row["asim_risk"] >= 0.5:
-            alerts.append({"t": row["t"], "metin": f"Sözleşme gücü aşım olasılığı %{row['asim_risk']*100:.0f}", "seviye": "uyari"})
+            alerts.append({"t": row["t"], "metin": f"Contract capacity breach probability {row['asim_risk']*100:.0f}%", "seviye": "uyari"})
         if row["koi_risk"] >= 0.3:
-            alerts.append({"t": row["t"], "metin": f"Arıtma KOİ sınır aşımı olasılığı %{row['koi_risk']*100:.0f}", "seviye": "uyari"})
+            alerts.append({"t": row["t"], "metin": f"Wastewater COD breach probability {row['koi_risk']*100:.0f}%", "seviye": "uyari"})
     return {"saatler": out, "uyarilar": alerts[:30], "kosu": n, "saat": hours}

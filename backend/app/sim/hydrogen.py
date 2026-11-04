@@ -1,10 +1,10 @@
-"""Hidrojen Vadisi: kendi güneş sahasıyla beslenen elektrolizör, H2 deposu ve döküm/metal fırınlarına
-doğalgaz yerine yeşil hidrojen karışımı (blend). Şebekeden elektrik çekmez; bu yüzden üretilen H2 yeşildir."""
+"""Hydrogen Valley: an electrolyser fed by its own solar field, an H2 store, and a green-hydrogen blend
+replacing natural gas in foundry/metal furnaces. It draws no grid power, so the H2 it makes is green."""
 import math
 
-KWH_PER_KG = 53.0          # elektrolizör tüketimi (sistem dahil)
-GAS_M3_PER_KG = 3.2        # 1 kg H2 ≈ 3,2 m³ doğalgazın ısıl değeri
-MAX_BLEND = 0.30           # fırın brülörlerinde en fazla %30 hacimsel/enerji karışımı
+KWH_PER_KG = 53.0          # electrolyser consumption (incl. balance of plant)
+GAS_M3_PER_KG = 3.2        # 1 kg H2 ≈ heating value of 3.2 m³ natural gas
+MAX_BLEND = 0.30           # furnace burners accept at most a 30% energy blend
 USERS = ("dokum", "metal")
 
 
@@ -15,7 +15,7 @@ class Hydrogen:
         self.ely_kw = 6000.0
         self.store_kg, self.cap_kg = 400.0, 2500.0
         self.enabled = parcel is not None
-        self.frac = 0.0             # bir önceki dakikada kullanıcılara verilen gaz ikame oranı
+        self.frac = 0.0             # gas substitution share delivered in the previous minute
         self.pv_kw = self.ely_load = self.prod_kgh = self.use_kgh = 0.0
         self.today = self._zero()
         self.total = self._zero()
@@ -35,7 +35,7 @@ class Hydrogen:
         made = min(made, room)
         self.store_kg += made
         users = [f for f in w.factories if f.sektor in USERS and f.status == "calisiyor"]
-        gas_m3_min = sum(f.gas_m3h for f in users) / 60 / max(1e-6, 1 - self.frac)   # ikame öncesi talep
+        gas_m3_min = sum(f.gas_m3h for f in users) / 60 / max(1e-6, 1 - self.frac)   # demand before substitution
         want_kg = gas_m3_min * MAX_BLEND / GAS_M3_PER_KG if self.enabled else 0.0
         used = min(self.store_kg, want_kg)
         self.store_kg -= used

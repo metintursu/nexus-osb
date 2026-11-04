@@ -1,10 +1,10 @@
-"""Bölge lojistiği: ortak filo, sipariş üretimi, rota, yükleme/boşaltma, kapı kuyrukları, acil durum aracı."""
+"""Zone logistics: shared fleet, order generation, routing, loading/unloading, gate queues, emergency vehicle."""
 import math
 
 from . import geo
 from .data import SUPPLY_LINKS, DIESEL_TL_KM, TRUCK_CO2_KM
 
-SPEED = 26.0          # harita birimi / dk  (≈13 km/sa bölge içi trafik + manevra)
+SPEED = 26.0          # map units / min  (≈13 km/h in-zone traffic + manoeuvring)
 EMERGENCY_SPEED = 42.0
 LOAD_MIN, UNLOAD_MIN = 8, 6
 
@@ -29,7 +29,7 @@ class Truck:
             self.x, self.y = pts[0]
 
     def advance(self, speed):
-        """Yol boyunca ilerle; (vardı_mı, gidilen_birim)."""
+        """Advance along the path; returns (arrived, distance_moved)."""
         moved = 0.0
         while self.seg_i < len(self.path) - 1 and speed > 1e-6:
             a, b = self.path[self.seg_i], self.path[self.seg_i + 1]
@@ -79,8 +79,8 @@ class Logistics:
         for i in range(48):
             plaka = f"16 NX {100 + i * 7:03d}"
             self.trucks.append(Truck(f"K{i+1:02d}", plaka, self.depot))
-        self.emergency = Truck("ITF-1", "OSB İtfaiye", w.hq_seg, "itfaiye")
-        self.orders = []          # bekleyen + aktif
+        self.emergency = Truck("FIRE-1", "Zone Fire Brigade", w.hq_seg, "itfaiye")
+        self.orders = []          # waiting + active
         self.done = []            # son teslimler
         self.gate_blocked = {k: False for k in geo.GATES}
         self.today = self._zero()
@@ -92,7 +92,7 @@ class Logistics:
         return {"teslim": 0, "km_yuklu": 0.0, "km_bos": 0.0, "co2_kg": 0.0, "yakit_tl": 0.0, "ton": 0.0,
                 "simbiyoz_sefer": 0, "ic_tedarik": 0, "giris": 0, "sevkiyat": 0}
 
-    # -------- yardımcılar --------
+    # -------- helpers --------
     def seg_of(self, place):
         kind, key = place
         if kind == "f":
@@ -142,7 +142,7 @@ class Logistics:
         if r < 0.38:
             f = self._weighted_factory()
             if f:
-                self.create_order("giris", ("g", gate), ("f", f.id), rng.uniform(8, 20), "Hammadde")
+                self.create_order("giris", ("g", gate), ("f", f.id), rng.uniform(8, 20), "Raw material")
         elif r < 0.76:
             f = self._weighted_factory()
             if f:
@@ -175,7 +175,7 @@ class Logistics:
             t.fill = 0.0
             t.go(geo.route(t.loc, self.seg_of(o.src)))
 
-    # -------- ana döngü --------
+    # -------- main loop --------
     def tick(self):
         w = self.w
         self._generate()
@@ -183,18 +183,18 @@ class Logistics:
         for t in self.trucks:
             self._tick_truck(t)
         self._tick_emergency()
-        # kapı kuyrukları
+        # gate queues
         for g in geo.GATES:
             q = sum(1 for o in self.orders if o.durum == "bekliyor" and (o.src == ("g", g) or o.dst == ("g", g)))
             key = f"kapi:{g}"
             if q >= 8:
-                w.incidents.raise_once(key, "lojistik", f"{geo.GATES[g]['ad']} sevkiyat kuyruğu", "uyari",
-                                       detay=f"{q} sipariş kapıda bekliyor",
-                                       aksiyonlar=["Diğer kapıya yönlendir", "Ortak filo havuzunu aç",
-                                                   "Tesislere geçici depo alanı (pazaryeri) öner"])
+                w.incidents.raise_once(key, "lojistik", f"Shipment queue at {geo.GATES[g]['ad']}", "uyari",
+                                       detay=f"{q} orders waiting at the gate",
+                                       aksiyonlar=["Reroute to the other gate", "Open the shared fleet pool",
+                                                   "Offer temporary storage to sites (marketplace)"])
             elif q <= 3:
                 w.incidents.resolve_key(key, "Kuyruk eridi")
-        # eski bekleyen siparişleri temizle (8 saat)
+        # drop stale waiting orders (8 hours)
         self.orders = [o for o in self.orders if not (o.durum == "bekliyor" and w.minute - o.created > 480 and o.tip != "simbiyoz")]
 
     def _account(self, t, dist):
@@ -280,7 +280,7 @@ class Logistics:
             t.state = "donus"
             t.go(geo.route(t.loc, self.depot))
 
-    # -------- acil durum aracı --------
+    # -------- emergency vehicle --------
     def dispatch_emergency(self, factory, incident_id):
         e = self.emergency
         e.task = {"fabrika": factory.id, "olay": incident_id, "asama": "gidiyor", "bekle": 0}
@@ -308,7 +308,7 @@ class Logistics:
             if arrived:
                 e.loc, e.state, e.task = w.hq_seg, "bos", None
 
-    # -------- çıktılar --------
+    # -------- outputs --------
     def empty_ratio(self, acc=None):
         acc = acc or self.today
         tot = acc["km_yuklu"] + acc["km_bos"]

@@ -1,4 +1,4 @@
-"""NEXUS OSB simülasyon testleri: python -m pytest -q"""
+"""NEXUS OSB simulation tests: python -m pytest -q"""
 import json
 
 from app.sim.world import World
@@ -87,7 +87,7 @@ def test_masters_cut_downtime():
 
 def test_hydrogen_replaces_gas_in_daylight():
     w = World(seed=9)
-    run(w, 720)        # gün ortası
+    run(w, 720)        # midday
     assert w.hydrogen.total["uretim_kg"] > 0
 
 
@@ -123,8 +123,8 @@ from app.bridge import Bridges, flatten, suggest
 
 def test_custom_zone_builds_and_runs():
     cfg = {"ad": "Test OSB", "sutun": 5, "satir": 2,
-           "tesisler": [{"ad": "A Döküm", "sektor": "dokum", "calisan": 200, "ada": [1, 0], "parsel": 2},
-                        {"ad": "B Tekstil", "sektor": "tekstil"}, {"ad": "C Gıda", "sektor": "gida", "vardiya": 3}]}
+           "tesisler": [{"ad": "A Foundry", "sektor": "dokum", "calisan": 200, "ada": [1, 0], "parsel": 2},
+                        {"ad": "B Textile", "sektor": "tekstil"}, {"ad": "C Foods", "sektor": "gida", "vardiya": 3}]}
     w = World(seed=12, cfg=cfg)
     assert w.name == "Test OSB" and len(w.factories) == 3
     a = w.factories[0]
@@ -132,7 +132,7 @@ def test_custom_zone_builds_and_runs():
     run(w, 1440)
     assert w.days and w.days[0]["enerji_mwh"] > 0
     assert len(w.export_cfg()["tesisler"]) == 3
-    World(seed=1)       # varsayılan haritayı geri kur
+    World(seed=1)       # restore the default map
 
 
 def test_calibration_from_template():
@@ -167,6 +167,6 @@ def test_real_price_and_weather_hooks():
     w = World(seed=14)
     w.real_prices = [2.0] * 8 + [3.0] * 9 + [6.0] * 5 + [2.5] * 2
     w.real_weather = [{"bulut": 100, "sicaklik": 35, "ruzgar": 5, "ruzgar_yon": 270}] * 24
-    run(w, 60 * 18)          # 18:00 → pahalı saat
+    run(w, 60 * 18)          # 18:00 → expensive hour
     assert w.period == "puant" and abs(w.tariff - 6.0) < 1e-9
     assert w.energy.cloud < 0.3 and w.wx["sogutma"] > 1.1

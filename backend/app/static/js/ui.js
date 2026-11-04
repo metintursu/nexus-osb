@@ -1,4 +1,4 @@
-// NEXUS OSB — arayüz yardımcıları: biçimlendirme, API, grafikler, ikonlar
+// NEXUS OSB — UI helpers: formatting, API, charts, icons
 export const $ = (s, r = document) => r.querySelector(s);
 export const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 
@@ -9,31 +9,31 @@ export function h(html) {
 }
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 
-const nf = (d) => new Intl.NumberFormat("tr-TR", { minimumFractionDigits: d, maximumFractionDigits: d });
+const nf = (d) => new Intl.NumberFormat("en-US", { minimumFractionDigits: d, maximumFractionDigits: d });
 const NF = [nf(0), nf(1), nf(2), nf(3)];
 export const fmt = {
   n: (x, d = 0) => (x == null || isNaN(x) ? "—" : NF[d].format(x)),
-  tl: (x) => (x == null ? "—" : NF[0].format(Math.round(x)) + " ₺"),
+  tl: (x) => (x == null ? "—" : (x < 0 ? "-₺" : "₺") + NF[0].format(Math.abs(Math.round(x)))),
   ktl: (x) => {
     if (x == null) return "—";
-    const a = Math.abs(x);
-    if (a >= 1e9) return NF[2].format(x / 1e9) + " Mr ₺";
-    if (a >= 1e6) return NF[2].format(x / 1e6) + " M ₺";
-    if (a >= 1e3) return NF[1].format(x / 1e3) + " B ₺";
-    return NF[0].format(x) + " ₺";
+    const a = Math.abs(x), s = x < 0 ? "-₺" : "₺";
+    if (a >= 1e9) return s + NF[2].format(a / 1e9) + "B";
+    if (a >= 1e6) return s + NF[2].format(a / 1e6) + "M";
+    if (a >= 1e3) return s + NF[1].format(a / 1e3) + "k";
+    return s + NF[0].format(a);
   },
   mw: (kw, d = 1) => (kw == null ? "—" : NF[d].format(kw / 1000)),
-  pct: (x, d = 0) => (x == null ? "—" : "%" + NF[d].format(x * 100)),
-  t: (m) => { const d = Math.floor(m / 1440) + 1, mm = m % 1440; return `G${d} ${String(Math.floor(mm / 60)).padStart(2, "0")}:${String(mm % 60).padStart(2, "0")}`; },
+  pct: (x, d = 0) => (x == null ? "—" : NF[d].format(x * 100) + "%"),
+  t: (m) => { const d = Math.floor(m / 1440) + 1, mm = m % 1440; return `D${d} ${String(Math.floor(mm / 60)).padStart(2, "0")}:${String(mm % 60).padStart(2, "0")}`; },
   hm: (m) => { const mm = ((m % 1440) + 1440) % 1440; return `${String(Math.floor(mm / 60)).padStart(2, "0")}:${String(mm % 60).padStart(2, "0")}`; },
-  dur: (m) => (m >= 60 ? `${Math.floor(m / 60)} sa ${m % 60} dk` : `${m} dk`),
+  dur: (m) => (m >= 60 ? `${Math.floor(m / 60)} h ${m % 60} min` : `${m} min`),
 };
 
-export const STATUS = { calisiyor: "Çalışıyor", bosta: "Vardiya dışı", ariza: "Arıza", bakim: "Bakım", durdu: "Durdu" };
+export const STATUS = { calisiyor: "Running", bosta: "Off shift", ariza: "Fault", bakim: "Maintenance", durdu: "Stopped" };
 export const STATUS_COLOR = { calisiyor: "#34d399", bosta: "#475569", ariza: "#fbbf24", bakim: "#60a5fa", durdu: "#f87171" };
-export const TRUCK = { gidiyor: "Yüklemeye gidiyor", yukleniyor: "Yükleniyor", yuklu: "Yüklü yolda", bosaltiyor: "Boşaltıyor", donus: "Depoya dönüyor", kuyrukta: "Kapı kuyruğunda", bos: "Boşta", yolda: "Olay yerine gidiyor", mudahalede: "Müdahalede", mudahale: "Müdahalede" };
-export const ORDER_TIP = { giris: "Hammadde girişi", sevkiyat: "Sevkiyat", ic_tedarik: "Bölge içi tedarik", simbiyoz: "Simbiyoz transferi" };
-export const PERIOD = { gece: "Gece", gunduz: "Gündüz", puant: "Puant" };
+export const TRUCK = { gidiyor: "Heading to pickup", yukleniyor: "Loading", yuklu: "Loaded, en route", bosaltiyor: "Unloading", donus: "Returning to depot", kuyrukta: "Queued at gate", bos: "Idle", yolda: "Heading to incident", mudahalede: "On site", mudahale: "On site" };
+export const ORDER_TIP = { giris: "Inbound raw material", sevkiyat: "Outbound shipment", ic_tedarik: "In-zone supply", simbiyoz: "Symbiosis transfer" };
+export const PERIOD = { gece: "Night", gunduz: "Day", puant: "Peak" };
 export const PERIOD_COLOR = { gece: "#6366f1", gunduz: "#22d3ee", puant: "#f97316" };
 
 export async function api(path, body, method) {
@@ -56,7 +56,7 @@ export function toast(text, kind = "") {
   while (box.children.length > 4) box.firstChild.remove();
 }
 
-// ---------------------------------------------------------- ikonlar
+// ---------------------------------------------------------- icons
 const P = {
   komuta: "M3 12h4l3-8 4 16 3-8h4",
   harita: "M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2zM9 4v14M15 6v14",
@@ -86,7 +86,7 @@ const P = {
 };
 export const icon = (k) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="${P[k] || P.komuta}"/></svg>`;
 
-// ---------------------------------------------------------- KPI kartı
+// ---------------------------------------------------------- KPI card
 export function kpi(id, label, ic, color) {
   return `<div class="card kpi" id="${id}"><div class="lbl">${label}</div><div class="val">—</div><div class="foot">&nbsp;</div>
     ${ic ? `<div class="ic" style="${color ? `color:${color};background:${color}1a` : ""}">${icon(ic)}</div>` : ""}<div class="bar" style="width:0;${color ? `background:${color}` : ""}"></div></div>`;
@@ -99,11 +99,11 @@ export function setKpi(id, val, unit, foot, bar) {
   if (bar !== undefined) el.querySelector(".bar").style.width = Math.max(0, Math.min(100, bar * 100)) + "%";
 }
 
-// ---------------------------------------------------------- çizgi grafik (SVG)
+// ---------------------------------------------------------- line chart (SVG)
 export function lineChart(el, cfg) {
   const W = el.clientWidth || 600, H = cfg.height || 220, pl = 46, pr = 12, pt = 10, pb = 24;
   const series = cfg.series.filter((s) => s.data && s.data.length);
-  if (!series.length) { el.innerHTML = `<div class="empty">Veri bekleniyor…</div>`; return; }
+  if (!series.length) { el.innerHTML = `<div class="empty">Waiting for data…</div>`; return; }
   const xs = series[0].data.map((d) => d[0]);
   let x0 = Math.min(...xs), x1 = Math.max(...xs);
   if (x1 === x0) x1 = x0 + 1;
@@ -160,9 +160,9 @@ export function lineChart(el, cfg) {
   svg.addEventListener("mouseleave", () => { tip.style.display = "none"; cx.setAttribute("opacity", "0"); });
 }
 
-// ---------------------------------------------------------- yatay çubuklar
+// ---------------------------------------------------------- horizontal bars
 export function bars(el, items, opt = {}) {
-  if (!items.length) { el.innerHTML = `<div class="empty">${opt.empty || "Veri yok"}</div>`; return; }
+  if (!items.length) { el.innerHTML = `<div class="empty">${opt.empty || "No data"}</div>`; return; }
   const mx = opt.max || Math.max(...items.map((i) => i.value), 1e-9);
   el.innerHTML = `<div class="bars">${items.map((i) => `<div class="b-row ${i.click ? "click" : ""}" ${i.id ? `data-id="${i.id}"` : ""} style="${i.click ? "cursor:pointer" : ""}">
       <div class="b-lbl" title="${esc(i.label)}">${i.html || esc(i.label)}</div>
@@ -170,7 +170,7 @@ export function bars(el, items, opt = {}) {
       <div class="b-val">${i.text ?? fmt.n(i.value, 1)}</div></div>`).join("")}</div>`;
 }
 
-// ---------------------------------------------------------- halka gösterge
+// ---------------------------------------------------------- ring gauge
 export function ring(value, size = 150, color = "var(--accent)", label = "", text) {
   const r = size / 2 - 10, c = 2 * Math.PI * r, v = Math.max(0, Math.min(1, value));
   return `<div class="ring" style="width:${size}px;height:${size}px"><svg width="${size}" height="${size}" style="transform:rotate(-90deg)">
@@ -193,10 +193,10 @@ export function sectorTag(world, s) {
   return `<span class="tag"><span class="sw" style="background:${x.renk}"></span>${esc(x.ad)}</span>`;
 }
 export const st = (d) => `<span class="st st-${d}">${STATUS[d] || d}</span>`;
-export const sev = (s) => `<span class="sev sev-${s}">${{ kritik: "Kritik", uyari: "Uyarı", bilgi: "Bilgi", firsat: "Fırsat" }[s] || s}</span>`;
+export const sev = (s) => `<span class="sev sev-${s}">${{ kritik: "Critical", uyari: "Warning", bilgi: "Info", firsat: "Opportunity" }[s] || s}</span>`;
 
 export function md(text) {
-  // çok küçük markdown: **kalın**, _italik_, satır başı "- "
+  // tiny markdown: **bold**, _italic_, leading "- "
   return esc(text)
     .replace(/\*\*(.+?)\*\*/g, "<b>$1</b>")
     .replace(/(^|\s)_(.+?)_(?=\s|$)/g, "$1<i class='muted'>$2</i>")

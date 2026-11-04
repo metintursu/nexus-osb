@@ -1,21 +1,21 @@
-"""Bölge haritası: yol ağı, adalar (bloklar), parseller ve rota motoru.
+"""Zone map: road network, blocks, parcels and the routing engine.
 
-Harita koordinatları: 1000 x 690 birim, 1 birim = 10 m (bölge ≈ 10 km x 6,9 km).
+Map coordinates: 1 unit = 10 m (default zone ≈ 10 km x 6.9 km).
 """
 import heapq
 import math
 
 UNIT_KM = 0.01
-GATE_NAMES = {"dogu": "Doğu Kapısı · Otoyol", "bati": "Batı Kapısı · Liman yolu", "kuzey": "Kuzey Kapısı", "guney": "Güney Kapısı"}
+GATE_NAMES = {"dogu": "East Gate · Motorway", "bati": "West Gate · Port road", "kuzey": "North Gate", "guney": "South Gate"}
 CFG = {}
 W, H, XS, YS, GATES, SUBSTATIONS, RESERVED_BLOCKS = 0, 0, [], [], {}, [], {}
 COLS, ROWS = 4, 3
 
 
 def configure(cfg=None):
-    """Bölge yerleşimini ayar sözlüğünden kurar. Boş ayar = varsayılan 4x3 adalı demo bölge.
+    """Builds the zone layout from a config dict. Empty config = default 4x3-block demo zone.
 
-    cfg anahtarları: sutun, satir, ada_genislik, ada_yukseklik, enerji_ada [c,r], hizmet_ada [c,r],
+    cfg keys: sutun (cols), satir (rows), ada_genislik, ada_yukseklik, enerji_ada [c,r], hizmet_ada [c,r],
     kapilar [{"yon": "dogu|bati|kuzey|guney", "yol": indeks, "ad": "..."}], trafolar [[xi, yi], ...]"""
     global CFG, W, H, XS, YS, GATES, SUBSTATIONS, RESERVED_BLOCKS, COLS, ROWS, GRAPH
     cfg = cfg or {}
@@ -55,7 +55,7 @@ def block_rect(c, r, inset=12):
 
 
 def parcels():
-    """Tüm sanayi parsellerini (2x2 / ada) döndürür."""
+    """Returns all industrial parcels (2x2 per block)."""
     out = []
     gap = 6
     for r in range(ROWS):
@@ -72,20 +72,20 @@ def parcels():
 
 
 def facilities():
-    """Ortak tesisler: GES, batarya, arıtma, lojistik merkezi, yönetim+itfaiye."""
+    """Shared facilities: solar farm, battery, wastewater plant, logistics hub, management + fire station."""
     inv = {v: k for k, v in RESERVED_BLOCKS.items()}
     ex, ey, ew, eh = block_rect(*inv["enerji"])
     hx, hy, hw, hh = block_rect(*inv["hizmet"])
     return {
-        "ges": {"ad": "OSB Güneş Santrali (GES)", "x": ex, "y": ey, "w": ew, "h": eh * 0.66},
-        "bess": {"ad": "Batarya Depolama (BESS)", "x": ex, "y": ey + eh * 0.7, "w": ew * 0.48, "h": eh * 0.3},
-        "aim": {"ad": "Ana İndirici Merkez", "x": ex + ew * 0.52, "y": ey + eh * 0.7, "w": ew * 0.48, "h": eh * 0.3},
-        "aritma": {"ad": "Merkezi Atıksu Arıtma", "x": hx, "y": hy, "w": hw * 0.48, "h": hh},
-        "lojistik": {"ad": "Lojistik Merkezi · Ortak Filo", "x": hx + hw * 0.52, "y": hy, "w": hw * 0.48, "h": hh},
+        "ges": {"ad": "Zone Solar Farm (PV)", "x": ex, "y": ey, "w": ew, "h": eh * 0.66},
+        "bess": {"ad": "Battery Storage (BESS)", "x": ex, "y": ey + eh * 0.7, "w": ew * 0.48, "h": eh * 0.3},
+        "aim": {"ad": "Main Substation", "x": ex + ew * 0.52, "y": ey + eh * 0.7, "w": ew * 0.48, "h": eh * 0.3},
+        "aritma": {"ad": "Central Wastewater Plant", "x": hx, "y": hy, "w": hw * 0.48, "h": hh},
+        "lojistik": {"ad": "Logistics Hub · Shared Fleet", "x": hx + hw * 0.52, "y": hy, "w": hw * 0.48, "h": hh},
     }
 
 
-# ---------------- yol grafiği ----------------
+# ---------------- road graph ----------------
 def _build_graph():
     nodes = {}
     for x in XS:
@@ -135,7 +135,7 @@ def _dijkstra(a, b):
 
 
 def route(a_seg, b_seg):
-    """a_seg / b_seg: (noktalar listesi, yol düğümü). Noktalar giriş->düğüm sırasında verilir."""
+    """a_seg / b_seg: (point list, road node). Points are given in entrance -> node order."""
     a_pts, a_node = a_seg
     b_pts, b_node = b_seg
     key = (a_node, b_node)
@@ -143,7 +143,7 @@ def route(a_seg, b_seg):
         _route_cache[key] = _dijkstra(a_node, b_node)
     mid = _route_cache[key]
     pts = list(a_pts) + list(mid) + list(reversed(b_pts))
-    # ardışık tekrarları temizle
+    # drop consecutive duplicates
     clean = [pts[0]]
     for p in pts[1:]:
         if p != clean[-1]:
@@ -152,7 +152,7 @@ def route(a_seg, b_seg):
 
 
 def access_segment(cx, cy, c, r):
-    """Bir parsel merkezinden en yakın caddeye ve kavşağa giden kısa yol."""
+    """Short path from a parcel centre to the nearest street and junction."""
     top, bot = YS[r], YS[r + 1]
     ry = top if abs(cy - top) <= abs(cy - bot) else bot
     left, right = XS[c], XS[c + 1]

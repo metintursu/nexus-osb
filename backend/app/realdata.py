@@ -1,13 +1,15 @@
-"""Gerçek dünya verisi: EPİAŞ PTF elektrik fiyatı, Open-Meteo hava durumu ve kalıcı ayarlar.
+"""Real-world data: EPİAŞ day-ahead electricity price (PTF/MCP), Open-Meteo weather and persistent settings.
 
-Fiyat kaynakları
-  simule — sabit gece/gündüz/puant tarifesi (varsayılan)
-  epias  — EPİAŞ Şeffaflık Platformu, Gün Öncesi Piyasası PTF (TL/MWh). 2024'ten beri giriş bileti (TGT) ister:
-           kullanıcı adı/şifre .env dosyasından (EPIAS_KULLANICI, EPIAS_SIFRE) veya oturum için arayüzden girilir.
-  dosya  — EPİAŞ sitesinden indirilen PTF Excel/CSV dosyası yüklenir.
-Tüketicinin ödediği birim fiyat = PTF/1000 + dağıtım, YEKDEM, vergi vb. sabit bileşen (ayarlanabilir, ₺/kWh).
+Price sources
+  simule — fixed night/day/peak tariff (default)
+  epias  — EPİAŞ Transparency Platform (Turkish power exchange), day-ahead market clearing price (TRY/MWh).
+           Since 2024 it requires a login ticket (TGT): username/password come from the .env file
+           (EPIAS_KULLANICI, EPIAS_SIFRE) or are entered in the UI for the current session.
+  dosya  — a PTF Excel/CSV file downloaded from the EPİAŞ website is uploaded.
+Unit price paid by the consumer = PTF/1000 + a fixed component for network fees, levies and taxes (adjustable, ₺/kWh).
 
-Hava: Open-Meteo (anahtarsız, ücretsiz) saatlik bulut, sıcaklık, rüzgâr hızı ve yönü. Simülasyon saati günün saatiyle eşlenir."""
+Weather: Open-Meteo (free, no API key) hourly cloud cover, temperature, wind speed and direction,
+mapped onto the simulation clock by hour of day."""
 import json
 import os
 import time
@@ -31,10 +33,10 @@ EPIAS_MCP = os.getenv("EPIAS_MCP_URL", "https://seffaflik.epias.com.tr/electrici
 OPEN_METEO = os.getenv("OPEN_METEO_URL", "https://api.open-meteo.com/v1/forecast")
 
 CITIES = {
-    "Ankara": (39.93, 32.86), "İstanbul": (41.01, 28.98), "İzmir": (38.42, 27.14), "Bursa": (40.19, 29.06),
+    "Ankara": (39.93, 32.86), "Istanbul": (41.01, 28.98), "Izmir": (38.42, 27.14), "Bursa": (40.19, 29.06),
     "Kocaeli": (40.77, 29.94), "Konya": (37.87, 32.48), "Kayseri": (38.73, 35.48), "Gaziantep": (37.07, 37.38),
-    "Manisa": (38.61, 27.43), "Denizli": (37.78, 29.09), "Adana": (37.0, 35.32), "Eskişehir": (39.78, 30.52),
-    "Sakarya": (40.76, 30.40), "Tekirdağ": (40.98, 27.51), "Kahramanmaraş": (37.58, 36.93), "Antalya": (36.90, 30.70),
+    "Manisa": (38.61, 27.43), "Denizli": (37.78, 29.09), "Adana": (37.0, 35.32), "Eskisehir": (39.78, 30.52),
+    "Sakarya": (40.76, 30.40), "Tekirdag": (40.98, 27.51), "Kahramanmaras": (37.58, 36.93), "Antalya": (36.90, 30.70),
 }
 
 
@@ -42,7 +44,7 @@ def now():
     return datetime.now(TZ)
 
 
-# ------------------------------------------------------------------ ayarlar
+# ------------------------------------------------------------------ settings
 def load_settings():
     try:
         with open(SETTINGS_PATH, encoding="utf-8") as fh:
@@ -58,7 +60,7 @@ def save_settings(data):
     os.replace(tmp, SETTINGS_PATH)
 
 
-# ------------------------------------------------------------------ fiyat
+# ------------------------------------------------------------------ price
 class Pricing:
     def __init__(self, st):
         c = st.get("fiyat", {})
@@ -70,7 +72,7 @@ class Pricing:
         self.pw = os.getenv("EPIAS_SIFRE") or None
         self.session_cred = False
         self.tgt, self.tgt_t = None, 0
-        self.live = {}            # epias'tan çekilen günler
+        self.live = {}            # days fetched from EPİAŞ
         self.status, self.error, self.last = "bekliyor", None, None
 
     def settings(self):
@@ -84,11 +86,11 @@ class Pricing:
         if self.tgt and time.time() - self.tgt_t < 100 * 60:
             return self.tgt
         if not (self.user and self.pw):
-            raise RuntimeError("EPİAŞ kullanıcı adı/şifre tanımlı değil")
+            raise RuntimeError("EPİAŞ username/password not set")
         r = await client.post(EPIAS_LOGIN, data={"username": self.user, "password": self.pw},
                               headers={"Accept": "text/plain"})
         if r.status_code not in (200, 201) or not r.text.startswith("TGT-"):
-            raise RuntimeError(f"EPİAŞ girişi başarısız (HTTP {r.status_code})")
+            raise RuntimeError(f"EPİAŞ login failed (HTTP {r.status_code})")
         self.tgt, self.tgt_t = r.text.strip(), time.time()
         return self.tgt
 
@@ -104,11 +106,11 @@ class Pricing:
                     r = await c.post(EPIAS_MCP, json={"startDate": stamp, "endDate": stamp}, headers={"TGT": tgt})
                     if r.status_code == 401:
                         self.tgt = None
-                        raise RuntimeError("EPİAŞ bileti reddedildi (401)")
+                        raise RuntimeError("EPİAŞ ticket rejected (401)")
                     if r.status_code != 200:
                         if d != d0:
-                            break           # yarının PTF'si 14:00'ten önce yayımlanmaz
-                        raise RuntimeError(f"PTF alınamadı (HTTP {r.status_code})")
+                            break           # tomorrow's PTF is not published before ~14:00
+                        raise RuntimeError(f"Could not fetch PTF (HTTP {r.status_code})")
                     items = r.json().get("items") or []
                     arr = [None] * 24
                     for it in items:
@@ -126,12 +128,12 @@ class Pricing:
         rows = tabular.read(name, raw)
         days = tabular.price_days(rows)
         if not days:
-            raise ValueError("Dosyada tarih/saat ve PTF (TL/MWh) sütunları bulunamadı")
+            raise ValueError("No date/hour and PTF (TRY/MWh) columns found in the file")
         self.days, self.dosya_ad = days, name
         return days
 
     def today_ptf(self):
-        """Bugünün 24 saatlik PTF'si (TL/MWh). Bugün yoksa en yakın (en son) gün kullanılır."""
+        """Today's 24-hour PTF (TRY/MWh). If today is missing, the most recent day is used."""
         src = self.live if self.mode == "epias" else self.days if self.mode == "dosya" else {}
         if not src:
             return None, None
@@ -151,7 +153,7 @@ class Pricing:
 
     def detail(self):
         day, ptf = self.today_ptf()
-        return {"mod": self.mode, "sabit_bilesen": self.fee, "durum": self.status if self.mode == "epias" else ("ok" if ptf else "veri yok"),
+        return {"mod": self.mode, "sabit_bilesen": self.fee, "durum": self.status if self.mode == "epias" else ("ok" if ptf else "no data"),
                 "hata": self.error if self.mode == "epias" else None, "son": self.last, "gun": day, "ptf": ptf,
                 "birim_fiyat": self.prices_kwh(), "kimlik": bool(self.user and self.pw), "oturum_kimlik": self.session_cred,
                 "dosya_ad": self.dosya_ad, "dosya_gun_sayisi": len(self.days), "epias_gun_sayisi": len(self.live)}
@@ -173,7 +175,7 @@ def _hour_of(item):
     return None
 
 
-# ------------------------------------------------------------------ hava
+# ------------------------------------------------------------------ weather
 class Weather:
     def __init__(self, st):
         c = st.get("hava", {})
@@ -207,13 +209,13 @@ class Weather:
                     arr[h] = {"bulut": hr["cloud_cover"][i], "sicaklik": hr["temperature_2m"][i], "ruzgar": hr["wind_speed_10m"][i],
                               "ruzgar_yon": hr["wind_direction_10m"][i], "isinim": hr["shortwave_radiation"][i]}
             if any(a is None for a in arr):
-                raise RuntimeError("Saatlik veri eksik geldi")
+                raise RuntimeError("Hourly data came back incomplete")
             self.hours = arr
             self.now_vals = d.get("current")
             self.status, self.error, self.last = "ok", None, now().isoformat(timespec="minutes")
         except Exception as e:  # noqa: BLE001
-            self.status, self.error = "hata", f"Open-Meteo'ya ulaşılamadı: {type(e).__name__}"
+            self.status, self.error = "hata", f"Could not reach Open-Meteo: {type(e).__name__}"
 
     def detail(self):
-        return {**self.settings(), "durum": self.status if self.enabled else "kapalı", "hata": self.error, "son": self.last,
+        return {**self.settings(), "durum": self.status if self.enabled else "off", "hata": self.error, "son": self.last,
                 "saatler": self.hours, "simdi": self.now_vals, "sehirler": {k: list(v) for k, v in CITIES.items()}}

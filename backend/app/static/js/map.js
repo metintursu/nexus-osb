@@ -1,8 +1,8 @@
-// NEXUS OSB — canlı bölge haritası (canvas)
+// NEXUS OSB — live zone map (canvas)
 import { h, esc, fmt, STATUS, STATUS_COLOR, TRUCK, ORDER_TIP } from "./ui.js";
 
-const LAYERS = { durum: "Durum", sektor: "Sektör", enerji: "Enerji", karbon: "Karbon" };
-const OVERLAYS = { lojistik: "Araçlar", simbiyoz: "Simbiyoz", trafo: "Trafo hatları", olay: "Olaylar" };
+const LAYERS = { durum: "Status", sektor: "Sector", enerji: "Energy", karbon: "Carbon" };
+const OVERLAYS = { lojistik: "Vehicles", simbiyoz: "Symbiosis", trafo: "Substation feeds", olay: "Incidents" };
 
 function lerpColor(stops, t) {
   t = Math.max(0, Math.min(1, t));
@@ -21,7 +21,7 @@ export function createMap(container, ctx, opts = {}) {
   const wrap = h(`<div class="map-wrap" style="height:${opts.height || 520}px"><canvas></canvas>
     ${opts.tools === false ? "" : `<div class="map-tools"><div class="seg lay">${Object.entries(LAYERS).map(([k, v]) => `<button data-k="${k}" class="${k === state.layer ? "on" : ""}">${v}</button>`).join("")}</div>
     <div class="seg ovl">${Object.entries(OVERLAYS).map(([k, v]) => `<button data-k="${k}" class="${state.ov[k] ? "on" : ""}">${v}</button>`).join("")}</div></div>`}
-    <div class="map-zoom"><button data-z="1">+</button><button data-z="-1">−</button><button data-z="0" title="Sığdır">⤢</button></div>
+    <div class="map-zoom"><button data-z="1">+</button><button data-z="-1">−</button><button data-z="0" title="Fit">⤢</button></div>
     <div class="map-legend"></div><div class="map-tip"></div></div>`);
   container.innerHTML = "";
   container.appendChild(wrap);
@@ -43,7 +43,7 @@ export function createMap(container, ctx, opts = {}) {
   const ro = new ResizeObserver(fit); ro.observe(wrap); fit();
   const toW = (px, py) => [(px - view.ox) / view.s, (py - view.oy) / view.s];
 
-  // ---------- etkileşim
+  // ---------- interaction
   wrap.querySelectorAll(".lay button").forEach((b) => b.onclick = () => { state.layer = b.dataset.k; wrap.querySelectorAll(".lay button").forEach((x) => x.classList.toggle("on", x === b)); drawLegend(); });
   wrap.querySelectorAll(".ovl button").forEach((b) => b.onclick = () => { state.ov[b.dataset.k] = !state.ov[b.dataset.k]; b.classList.toggle("on", state.ov[b.dataset.k]); });
   wrap.querySelectorAll(".map-zoom button").forEach((b) => b.onclick = () => {
@@ -98,19 +98,19 @@ export function createMap(container, ctx, opts = {}) {
     let html = "";
     if (hit.kind === "f") {
       const f = fsMap[hit.id], lf = (live.f || []).find((x) => x.id === hit.id) || {};
-      html = `<b>${esc(f.ad)}</b><div class="muted" style="font-size:11.5px">${esc(f.sektor_ad)} · ${f.calisan} çalışan · ${f.tm}</div>
-        <div class="kv"><span>Durum</span><span style="color:${STATUS_COLOR[lf.d]}">${STATUS[lf.d] || "—"}${lf.canli ? " · CANLI" : ""}</span>
-        <span>Güç</span><span class="num">${fmt.mw(lf.kw, 2)} / ${fmt.mw(f.kurulu_kw, 1)} MW</span>
-        <span>OEE</span><span class="num">${fmt.pct(lf.oee)}</span><span>Emisyon</span><span class="num">${fmt.n(lf.co2 / 1000, 2)} tCO₂/sa</span>
-        ${lf.dr ? `<span>Talep kaydırma</span><span class="t-acc">aktif</span>` : ""}</div><div class="dim" style="margin-top:5px;font-size:11px">Ayrıntı için tıkla</div>`;
+      html = `<b>${esc(f.ad)}</b><div class="muted" style="font-size:11.5px">${esc(f.sektor_ad)} · ${f.calisan} employees · ${f.tm}</div>
+        <div class="kv"><span>Status</span><span style="color:${STATUS_COLOR[lf.d]}">${STATUS[lf.d] || "—"}${lf.canli ? " · LIVE" : ""}</span>
+        <span>Power</span><span class="num">${fmt.mw(lf.kw, 2)} / ${fmt.mw(f.kurulu_kw, 1)} MW</span>
+        <span>OEE</span><span class="num">${fmt.pct(lf.oee)}</span><span>Emissions</span><span class="num">${fmt.n(lf.co2 / 1000, 2)} tCO₂/h</span>
+        ${lf.dr ? `<span>Load shift</span><span class="t-acc">active</span>` : ""}</div><div class="dim" style="margin-top:5px;font-size:11px">Click for details</div>`;
       cv.style.cursor = "pointer";
     } else if (hit.kind === "t") {
       const a = hit.t.a;
-      html = `<b>${a[5] === "usta" ? (ctx.world.ustalar.find((u) => u.id === a[0]) || {}).ad || a[0] : a[0]}</b> <span class="muted">${a[5] === "itfaiye" ? "OSB İtfaiye" : a[5] === "usta" ? "Usta Havuzu" : "Ortak filo"}</span><div class="kv"><span>Durum</span><span>${TRUCK[a[3]] || a[3]}</span>
-        <span>İş</span><span>${ORDER_TIP[a[5]] || (a[5] === "itfaiye" ? "Acil müdahale" : a[5] === "usta" ? "Arıza müdahalesi" : "—")}</span><span>Doluluk</span><span class="num">${fmt.pct(a[4])}</span></div>`;
+      html = `<b>${a[5] === "usta" ? (ctx.world.ustalar.find((u) => u.id === a[0]) || {}).ad || a[0] : a[0]}</b> <span class="muted">${a[5] === "itfaiye" ? "Zone Fire Brigade" : a[5] === "usta" ? "Technician Pool" : "Shared fleet"}</span><div class="kv"><span>Status</span><span>${TRUCK[a[3]] || a[3]}</span>
+        <span>Job</span><span>${ORDER_TIP[a[5]] || (a[5] === "itfaiye" ? "Emergency response" : a[5] === "usta" ? "Fault response" : "—")}</span><span>Fill</span><span class="num">${fmt.pct(a[4])}</span></div>`;
     } else {
       const i = ctx.world.trafolar.indexOf(hit.tm), u = (live.e && live.e.tm[i]) || 0;
-      html = `<b>${hit.tm.id} trafo merkezi</b><div class="kv"><span>Yüklenme</span><span class="num" style="color:${u > 1 ? "#f87171" : u > 0.9 ? "#fbbf24" : "#34d399"}">${fmt.pct(u)}</span></div>`;
+      html = `<b>${hit.tm.id} substation</b><div class="kv"><span>Load</span><span class="num" style="color:${u > 1 ? "#f87171" : u > 0.9 ? "#fbbf24" : "#34d399"}">${fmt.pct(u)}</span></div>`;
     }
     tip.innerHTML = html;
     tip.style.display = "block";
@@ -123,14 +123,14 @@ export function createMap(container, ctx, opts = {}) {
     let html = "";
     if (state.layer === "durum") html = Object.entries(STATUS).map(([k, v]) => `<span><i style="background:${STATUS_COLOR[k]}"></i>${v}</span>`).join("");
     else if (state.layer === "sektor") html = Object.entries(ctx.world.sektorler).map(([k, v]) => `<span><i style="background:${v.renk}"></i>${v.kisa}</span>`).join("");
-    else if (state.layer === "enerji") html = `<span><i style="background:rgb(14,42,58)"></i>Düşük yük</span><span><i style="background:#22d3ee"></i>Orta</span><span><i style="background:#fbbf24"></i>Yüksek</span><span><i style="background:#f87171"></i>Tam yük</span>`;
-    else html = `<span><i style="background:rgb(22,101,52)"></i>Düşük emisyon</span><span><i style="background:#fbbf24"></i>Orta</span><span><i style="background:#ef4444"></i>Yüksek</span>`;
-    html += `<span><i style="background:#22d3ee;border-radius:50%"></i>Yüklü kamyon</span><span><i style="background:#94a3b8;border-radius:50%"></i>Boş kamyon</span><span><i style="background:#c084fc;transform:rotate(45deg)"></i>Usta</span>`;
+    else if (state.layer === "enerji") html = `<span><i style="background:rgb(14,42,58)"></i>Low load</span><span><i style="background:#22d3ee"></i>Medium</span><span><i style="background:#fbbf24"></i>High</span><span><i style="background:#f87171"></i>Full load</span>`;
+    else html = `<span><i style="background:rgb(22,101,52)"></i>Low emissions</span><span><i style="background:#fbbf24"></i>Medium</span><span><i style="background:#ef4444"></i>High</span>`;
+    html += `<span><i style="background:#22d3ee;border-radius:50%"></i>Loaded truck</span><span><i style="background:#94a3b8;border-radius:50%"></i>Empty truck</span><span><i style="background:#c084fc;transform:rotate(45deg)"></i>Technician</span>`;
     legend.innerHTML = html;
   }
   drawLegend();
 
-  // ---------- veri
+  // ---------- data
   const tickMs = () => Math.max(90, Math.min(1000, 1000 / (ctx.tps() || 1)));
   function tpos(t) {
     const k = Math.min(1, (performance.now() - t.t) / t.d);
@@ -149,7 +149,7 @@ export function createMap(container, ctx, opts = {}) {
   }
   update(live);
 
-  // ---------- çizim
+  // ---------- drawing
   function factoryFill(f, lf) {
     if (!lf) return "#1e293b";
     if (state.layer === "sektor") return f.renk;
@@ -168,43 +168,43 @@ export function createMap(container, ctx, opts = {}) {
     g.fillStyle = "#060b15"; g.fillRect(0, 0, Wc, Hc);
     g.setTransform(dpr * view.s, 0, 0, dpr * view.s, dpr * view.ox, dpr * view.oy);
     const s = view.s, W = ctx.world.harita;
-    // zemin
+    // ground
     g.fillStyle = "#0a1221"; rr(0, 0, W0, H0, 14); g.fill();
     g.strokeStyle = "rgba(34,211,238,.05)"; g.lineWidth = 1 / s;
     for (let x = 0; x <= W0; x += 50) { g.beginPath(); g.moveTo(x, 0); g.lineTo(x, H0); g.stroke(); }
     for (let y = 0; y <= H0; y += 50) { g.beginPath(); g.moveTo(0, y); g.lineTo(W0, y); g.stroke(); }
-    // adalar
+    // blocks
     for (let c = 0; c < W.xs.length - 1; c++) for (let r = 0; r < W.ys.length - 1; r++) {
       g.fillStyle = "#0d1729"; rr(W.xs[c] + 8, W.ys[r] + 8, W.xs[c + 1] - W.xs[c] - 16, W.ys[r + 1] - W.ys[r] - 16, 6); g.fill();
     }
-    // yollar
+    // roads
     g.lineCap = "round";
     for (const sg of W.yollar) { g.strokeStyle = "#17233a"; g.lineWidth = 13; g.beginPath(); g.moveTo(sg[0], sg[1]); g.lineTo(sg[2], sg[3]); g.stroke(); }
     g.setLineDash([6, 8]);
     for (const sg of W.yollar) { g.strokeStyle = "#2b3a58"; g.lineWidth = 1; g.beginPath(); g.moveTo(sg[0], sg[1]); g.lineTo(sg[2], sg[3]); g.stroke(); }
     g.setLineDash([]);
-    // kapılar
+    // gates
     for (const [k, gt] of Object.entries(ctx.world.kapilar)) {
       g.fillStyle = "#0e2a3a"; g.strokeStyle = "#22d3ee"; g.lineWidth = 1.2; rr(gt.x - 11, gt.y - 11, 22, 22, 5); g.fill(); g.stroke();
-      g.fillStyle = "#a5f3fc"; g.font = "600 9px Inter, sans-serif"; g.textAlign = "center"; g.fillText(k === "dogu" ? "D" : "B", gt.x, gt.y + 3);
+      g.fillStyle = "#a5f3fc"; g.font = "600 9px Inter, sans-serif"; g.textAlign = "center"; g.fillText({ dogu: "E", bati: "W", kuzey: "N", guney: "S" }[k] || "G", gt.x, gt.y + 3);
       g.fillStyle = "#6b7fa3"; g.font = "9px Inter, sans-serif"; g.fillText(gt.ad, gt.x + (k === "dogu" ? -40 : 40), gt.y - 16);
     }
-    // ortak tesisler
+    // shared facilities
     const T = ctx.world.tesisler, e = live.e || {};
     const ges = T.ges, solar = (e.ges || 0) / (ctx.world.ges_kwp || 18000);
     g.fillStyle = "#0b1a33"; rr(ges.x, ges.y, ges.w, ges.h, 6); g.fill();
     for (let y = ges.y + 6; y < ges.y + ges.h - 6; y += 9) for (let x = ges.x + 6; x < ges.x + ges.w - 10; x += 16) {
       g.fillStyle = `rgba(${60 + 120 * solar},${120 + 90 * solar},${200 + 50 * solar},${0.45 + 0.5 * solar})`; g.fillRect(x, y, 13, 6);
     }
-    label(ges.x + ges.w / 2, ges.y + ges.h / 2 + 3, `GES · ${fmt.mw(e.ges, 1)} MW`, "#e0f2fe", 10, true);
+    label(ges.x + ges.w / 2, ges.y + ges.h / 2 + 3, `Solar · ${fmt.mw(e.ges, 1)} MW`, "#e0f2fe", 10, true);
     const b = T.bess, soc = e.soc || 0;
     g.fillStyle = "#0f1b2f"; rr(b.x, b.y, b.w, b.h, 5); g.fill();
     g.fillStyle = e.bess > 0 ? "#fb923c" : e.bess < 0 ? "#34d399" : "#22d3ee"; rr(b.x + 3, b.y + b.h - 6, (b.w - 6) * soc, 3, 2); g.fill();
-    label(b.x + b.w / 2, b.y + b.h / 2, `BESS %${Math.round(soc * 100)}`, "#cbd5e1", 9, true);
-    label(b.x + b.w / 2, b.y + b.h / 2 + 11, e.bess > 50 ? "▼ deşarj" : e.bess < -50 ? "▲ şarj" : "beklemede", e.bess > 50 ? "#fb923c" : e.bess < -50 ? "#34d399" : "#64748b", 8);
+    label(b.x + b.w / 2, b.y + b.h / 2, `BESS ${Math.round(soc * 100)}%`, "#cbd5e1", 9, true);
+    label(b.x + b.w / 2, b.y + b.h / 2 + 11, e.bess > 50 ? "▼ discharging" : e.bess < -50 ? "▲ charging" : "standby", e.bess > 50 ? "#fb923c" : e.bess < -50 ? "#34d399" : "#64748b", 8);
     const a = T.aim;
     g.fillStyle = live.kesinti ? "#3b0d0d" : "#101c30"; rr(a.x, a.y, a.w, a.h, 5); g.fill();
-    label(a.x + a.w / 2, a.y + a.h / 2 + 3, live.kesinti ? "AİM · KESİK" : "Ana İndirici", live.kesinti ? "#fca5a5" : "#94a3b8", 9, true);
+    label(a.x + a.w / 2, a.y + a.h / 2 + 3, live.kesinti ? "SUBSTATION · DOWN" : "Main substation", live.kesinti ? "#fca5a5" : "#94a3b8", 9, true);
     const ar = T.aritma, util = (live.su && live.su.util) || 0;
     g.fillStyle = "#0c1a2c"; rr(ar.x, ar.y, ar.w, ar.h, 6); g.fill();
     for (let i = 0; i < 3; i++) {
@@ -212,17 +212,17 @@ export function createMap(container, ctx, opts = {}) {
       g.beginPath(); g.arc(cx, cy, 14, 0, Math.PI * 2); g.fillStyle = util > 1 ? "#7c2d12" : "#0e3a52"; g.fill();
       g.beginPath(); g.arc(cx, cy, 14, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * Math.min(1, util)); g.strokeStyle = util > 1 ? "#f87171" : "#38bdf8"; g.lineWidth = 2.5; g.stroke();
     }
-    label(ar.x + ar.w / 2, ar.y + ar.h - 6, `Arıtma %${Math.round(util * 100)}`, "#bae6fd", 9, true);
+    label(ar.x + ar.w / 2, ar.y + ar.h - 6, `Wastewater ${Math.round(util * 100)}%`, "#bae6fd", 9, true);
     const lj = T.lojistik, parked = ((live.l && (ctx.world.filo || 48) - live.l.aktif) || 0);
     g.fillStyle = "#0e1a2e"; rr(lj.x, lj.y, lj.w, lj.h, 6); g.fill();
     for (let i = 0; i < Math.min(parked, 30); i++) { g.fillStyle = "#334155"; g.fillRect(lj.x + 8 + (i % 5) * 15, lj.y + 22 + Math.floor(i / 5) * 14, 11, 7); }
-    label(lj.x + lj.w / 2, lj.y + 13, "Lojistik Merkezi", "#94a3b8", 9, true);
-    label(lj.x + lj.w / 2, lj.y + lj.h - 8, `${parked} araç parkta`, "#64748b", 8.5);
+    label(lj.x + lj.w / 2, lj.y + 13, "Logistics Hub", "#94a3b8", 9, true);
+    label(lj.x + lj.w / 2, lj.y + lj.h - 8, `${parked} vehicles parked`, "#64748b", 8.5);
     const hq = ctx.world.yonetim;
     g.fillStyle = "#16132e"; g.strokeStyle = "#a78bfa"; g.lineWidth = 1; rr(hq.x, hq.y, hq.w, hq.h, 6); g.fill(); g.stroke();
-    label(hq.x + hq.w / 2, hq.y + hq.h / 2 - 2, "OSB Yönetim", "#ddd6fe", 9.5, true);
-    label(hq.x + hq.w / 2, hq.y + hq.h / 2 + 10, "İtfaiye · Acil Durum", "#a78bfa", 8);
-    // hidrojen vadisi
+    label(hq.x + hq.w / 2, hq.y + hq.h / 2 - 2, "Zone Management", "#ddd6fe", 9.5, true);
+    label(hq.x + hq.w / 2, hq.y + hq.h / 2 + 10, "Fire · Emergency", "#a78bfa", 8);
+    // hydrogen valley
     const H2 = ctx.world.hidrojen, hl2 = live.h2 || {};
     if (H2) {
       g.fillStyle = "#081a24"; g.strokeStyle = "#5eead4"; g.lineWidth = 1.1; rr(H2.x, H2.y, H2.w, H2.h, 6); g.fill(); g.stroke();
@@ -235,7 +235,7 @@ export function createMap(container, ctx, opts = {}) {
         g.beginPath(); g.arc(cx, cy, 7, 0, 7); g.fillStyle = "#0f3b3a"; g.fill();
         g.beginPath(); g.arc(cx, cy, 7, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (hl2.doluluk || 0)); g.strokeStyle = "#5eead4"; g.lineWidth = 2; g.stroke();
       }
-      label(H2.x + H2.w / 2, H2.y + H2.h - 4, `H₂ ${Math.round(hl2.stok || 0)} kg · %${Math.round((hl2.oran || 0) * 100)} karışım`, "#99f6e4", 8, true);
+      label(H2.x + H2.w / 2, H2.y + H2.h - 4, `H₂ ${Math.round(hl2.stok || 0)} kg · ${Math.round((hl2.oran || 0) * 100)}% blend`, "#99f6e4", 8, true);
       if (state.ov.simbiyoz && (hl2.kullanim || 0) > 0) {
         for (const f of fs) if (f.sektor === "dokum" || f.sektor === "metal") {
           g.strokeStyle = "rgba(94,234,212,.55)"; g.lineWidth = 1.6; g.setLineDash([2, 6]); g.lineDashOffset = -t * 18;
@@ -243,12 +243,12 @@ export function createMap(container, ctx, opts = {}) {
         }
       }
     }
-    // boş parseller
+    // empty plots
     g.setLineDash([4, 4]); g.strokeStyle = "#24314d"; g.lineWidth = 1;
     for (const p of ctx.world.bos_parseller) { rr(p.x, p.y, p.w, p.h, 5); g.stroke(); }
     g.setLineDash([]);
-    for (const p of ctx.world.bos_parseller) label(p.x + p.w / 2, p.y + p.h / 2 + 3, "boş parsel", "#334155", 8.5);
-    // trafo hatları
+    for (const p of ctx.world.bos_parseller) label(p.x + p.w / 2, p.y + p.h / 2 + 3, "vacant parcel", "#334155", 8.5);
+    // substation feeds
     const lmap = Object.fromEntries((live.f || []).map((x) => [x.id, x]));
     if (state.ov.trafo || state.layer === "enerji") {
       ctx.world.trafolar.forEach((tm, i) => {
@@ -257,7 +257,7 @@ export function createMap(container, ctx, opts = {}) {
         for (const f of fs) if (f.tm === tm.id) { g.beginPath(); g.moveTo(tm.x, tm.y); g.lineTo(f.cx, f.cy); g.stroke(); }
       });
     }
-    // fabrikalar
+    // factories
     for (const f of fs) {
       const lf = lmap[f.id];
       const col = factoryFill(f, lf);
@@ -266,7 +266,7 @@ export function createMap(container, ctx, opts = {}) {
       g.globalAlpha = state.layer === "durum" && lf && lf.d === "bosta" ? 0.5 : 0.88;
       g.fillStyle = col; rr(f.x + 2, f.y + 2, f.w - 4, f.h - 4, 5); g.fill();
       g.globalAlpha = 1;
-      // çatı deseni
+      // roof pattern
       g.fillStyle = "rgba(0,0,0,.22)";
       for (let i = 0; i < 4; i++) g.fillRect(f.x + 6 + i * ((f.w - 12) / 4), f.y + 6, (f.w - 12) / 4 - 3, 8);
       g.strokeStyle = hl ? "#ffffff" : f.renk; g.lineWidth = hl ? 2.2 : 1.1; rr(f.x + 0.5, f.y + 0.5, f.w - 1, f.h - 1, 6); g.stroke();
@@ -276,7 +276,7 @@ export function createMap(container, ctx, opts = {}) {
       if (s > 1.25 && lf) label(f.x + f.w / 2, f.y + f.h / 2 + 15, `${fmt.mw(lf.kw, 2)} MW · %${Math.round(lf.oee * 100)}`, dark ? "rgba(6,16,29,.8)" : "#94a3b8", 7.5);
       if (lf && lf.canli) { g.fillStyle = "#f43f5e"; g.beginPath(); g.arc(f.x + f.w - 7, f.y + 7, 3 + Math.sin(t * 5), 0, 7); g.fill(); }
     }
-    // trafo merkezleri
+    // substations
     ctx.world.trafolar.forEach((tm, i) => {
       const u = (e.tm && e.tm[i]) || 0, col = live.kesinti ? "#64748b" : u > 1 ? "#f87171" : u > 0.9 ? "#fbbf24" : "#34d399";
       g.fillStyle = "#0b1322"; rr(tm.x - 9, tm.y - 9, 18, 18, 4); g.fill();
@@ -285,7 +285,7 @@ export function createMap(container, ctx, opts = {}) {
       label(tm.x, tm.y + 3, "⚡", col, 9, true);
       label(tm.x, tm.y - 17, tm.id, "#94a3b8", 8.5, true);
     });
-    // simbiyoz akışları
+    // symbiosis flows
     if (state.ov.simbiyoz) {
       for (const [p, c, w] of live.s || []) {
         const A = fsMap[p], B = fsMap[c]; if (!A || !B) continue;
@@ -296,7 +296,7 @@ export function createMap(container, ctx, opts = {}) {
         g.fillStyle = col; g.beginPath(); g.arc(B.cx, B.cy, 3.5, 0, 7); g.fill();
       }
     }
-    // olaylar
+    // incidents
     if (state.ov.olay) {
       for (const [fid, sv] of live.oa || []) {
         const f = fsMap[fid]; if (!f) continue;
@@ -305,7 +305,7 @@ export function createMap(container, ctx, opts = {}) {
         g.beginPath(); g.arc(f.cx, f.cy, 10 + ph * 34, 0, 7); g.strokeStyle = `rgba(${col},${1 - ph})`; g.lineWidth = 2; g.stroke();
       }
     }
-    // afet katmanı
+    // disaster layer
     const af = live.afet;
     if (af && af.tip === "deprem") {
       const age = (live.t - af.t0);
@@ -314,7 +314,7 @@ export function createMap(container, ctx, opts = {}) {
         g.beginPath(); g.arc(af.x, af.y, 30 + ph * 700, 0, 7); g.strokeStyle = `rgba(248,113,113,${(1 - ph) * (age < 120 ? 0.55 : 0.2)})`; g.lineWidth = 2.5; g.stroke();
       }
       g.fillStyle = "#ef4444"; g.beginPath(); g.arc(af.x, af.y, 7, 0, 7); g.fill();
-      label(af.x, af.y - 12, `M${af.M} · merkez üssü`, "#fecaca", 11, true);
+      label(af.x, af.y - 12, `M${af.M} · epicentre`, "#fecaca", 11, true);
       for (const [fid, lv] of af.hasar) {
         const f = fsMap[fid]; if (!f) continue;
         const c = lv === "agir" ? "#ef4444" : lv === "orta" ? "#f97316" : "#facc15";
@@ -327,10 +327,10 @@ export function createMap(container, ctx, opts = {}) {
       g.fillStyle = grd; g.beginPath(); g.moveTo(0, -8); g.quadraticCurveTo(L * 0.6, -Wd * 1.1, L, -Wd * 0.4); g.lineTo(L, Wd * 0.4); g.quadraticCurveTo(L * 0.6, Wd * 1.1, 0, 8); g.closePath(); g.fill();
       for (let i = 0; i < 14; i++) { const k = ((t * 0.12 + i / 14) % 1); g.beginPath(); g.arc(k * L, Math.sin(i * 7.3 + t) * Wd * k * 0.7, 6 + k * 14, 0, 7); g.fillStyle = `rgba(217,249,157,${0.18 * (1 - k)})`; g.fill(); }
       g.restore();
-      label(af.x, af.y - 14, "☣ SIZINTI", "#d9f99d", 11, true);
+      label(af.x, af.y - 14, "☣ LEAK", "#d9f99d", 11, true);
       for (const fid of af.altinda || []) { const f = fsMap[fid]; if (!f) continue; g.strokeStyle = "#bef264"; g.lineWidth = 2; g.setLineDash([4, 3]); rr(f.x - 4, f.y - 4, f.w + 8, f.h + 8, 8); g.stroke(); g.setLineDash([]); }
     }
-    // araçlar
+    // vehicles
     if (state.ov.lojistik) {
       for (const tr of Object.values(trucks)) {
         const [x, y] = tpos(tr), st = tr.a[3], kind = tr.a[5];
@@ -349,7 +349,7 @@ export function createMap(container, ctx, opts = {}) {
         if (st === "yuklu") { g.strokeStyle = "rgba(255,255,255,.5)"; g.lineWidth = 0.8; g.stroke(); }
       }
     }
-    // gece & kesinti örtüsü
+    // night & outage overlay
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
     const hr = live.t != null ? (live.t % 1440) / 60 : 12;
     const night = hr < 6 || hr > 20 ? 0.22 : hr < 7.5 ? 0.22 * (7.5 - hr) / 1.5 : hr > 18.5 ? 0.22 * (hr - 18.5) / 1.5 : 0;
@@ -358,12 +358,12 @@ export function createMap(container, ctx, opts = {}) {
       const rx = Wc - 46, ry = Hc - 46, a = live.ruzgar.aci;
       g.fillStyle = "rgba(7,12,22,.85)"; g.beginPath(); g.arc(rx, ry, 24, 0, 7); g.fill(); g.strokeStyle = "#26375a"; g.lineWidth = 1; g.stroke();
       g.save(); g.translate(rx, ry); g.rotate(a); g.strokeStyle = "#a5f3fc"; g.lineWidth = 2; g.beginPath(); g.moveTo(-13, 0); g.lineTo(13, 0); g.lineTo(7, -5); g.moveTo(13, 0); g.lineTo(7, 5); g.stroke(); g.restore();
-      g.fillStyle = "#94a3b8"; g.font = "600 9px Inter, sans-serif"; g.textAlign = "center"; g.fillText(`rüzgâr ${live.ruzgar.hiz} m/s`, rx, ry + 36);
+      g.fillStyle = "#94a3b8"; g.font = "600 9px Inter, sans-serif"; g.textAlign = "center"; g.fillText(`wind ${live.ruzgar.hiz} m/s`, rx, ry + 36);
     }
     if (live.kesinti) {
       g.fillStyle = `rgba(80,10,10,${0.12 + 0.06 * Math.sin(t * 3)})`; g.fillRect(0, 0, Wc, Hc);
       g.fillStyle = "#fecaca"; g.font = "700 13px 'Space Grotesk', sans-serif"; g.textAlign = "right";
-      g.fillText("ADA MODU · ŞEBEKE KESİK", Wc - 52, 26);
+      g.fillText("ISLAND MODE · GRID DOWN", Wc - 52, 26);
     }
   }
   function label(x, y, text, color, size, bold) {

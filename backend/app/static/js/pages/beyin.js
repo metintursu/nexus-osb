@@ -2,21 +2,21 @@ import { $, $$, esc, fmt, md, sev } from "../ui.js";
 
 const hist = [];
 let tts = false;
-const CHIPS = ["Bölgenin şu anki durumunu özetle, en acil 3 aksiyon ne?", "TM-4'ü rahatlat", "Otopilotu aç", "Enerji faturasını bu hafta nasıl düşürürüz?",
-  "SKDM riski en yüksek tesisler hangileri, ne yapmalı?", "Kamyonlar neden boş dolaşıyor?", "Hangi atık bağlantısını önce kurmalıyız?",
-  "Arıtma tesisi sınırda mı?", "Açık arızalar ve önerilen müdahaleler", "Yarın sabah yönetim kuruluna 5 maddelik brifing hazırla"];
+const CHIPS = ["Summarize the zone right now — what are the 3 most urgent actions?", "Relieve TM-4", "Turn on autopilot", "How do we cut the energy bill this week?",
+  "Which sites have the highest CBAM risk, and what should they do?", "Why are trucks driving around empty?", "Which waste link should we build first?",
+  "Is the wastewater plant at its limit?", "Open faults and recommended responses", "Prepare a 5-point briefing for tomorrow morning's board meeting"];
 
 export default {
   mount(root, ctx) {
     root.innerHTML = `<div class="grid" style="grid-template-columns:minmax(0,1fr) 360px">
-      <div class="card chat"><div class="card-h"><h3>Bölge Beyni ile konuş</h3><span class="sub" id="bst">durum kontrol ediliyor…</span></div>
+      <div class="card chat"><div class="card-h"><h3>Talk to the Zone Brain</h3><span class="sub" id="bst">checking status…</span></div>
         <div class="chips">${CHIPS.map((c) => `<span class="chip">${esc(c)}</span>`).join("")}</div>
         <div class="chat-log" id="clog"></div>
-        <div class="chat-in"><button class="mic" id="mic" title="Sesli komuta">🎙</button><textarea class="inp" id="cin" placeholder="Bölge hakkında bir şey sor ya da komut ver: 'TM-3'ü rahatlat', 'otopilotu aç', 'deprem senaryosu başlat'…"></textarea><button class="btn pri" id="csend">Gönder</button></div>
-        <label class="switch mt" id="tts" style="font-size:12px"><i></i><span>Yanıtları sesli oku</span></label></div>
+        <div class="chat-in"><button class="mic" id="mic" title="Voice command">🎙</button><textarea class="inp" id="cin" placeholder="Ask about the zone or give a command: 'relieve TM-3', 'turn on autopilot', 'start earthquake scenario'…"></textarea><button class="btn pri" id="csend">Send</button></div>
+        <label class="switch mt" id="tts" style="font-size:12px"><i></i><span>Read replies aloud</span></label></div>
       <div class="grid" style="align-content:start">
-        <div class="card"><div class="card-h"><h3>Yapay zekâ motoru</h3></div><div id="aim" style="font-size:13px"></div></div>
-        <div class="card"><div class="card-h"><h3>Canlı içgörüler</h3><span class="sub">her 30 dk yenilenir</span></div><div class="list" id="bins"></div></div></div></div>`;
+        <div class="card"><div class="card-h"><h3>AI engine</h3></div><div id="aim" style="font-size:13px"></div></div>
+        <div class="card"><div class="card-h"><h3>Live insights</h3><span class="sub">refreshed every 30 min</span></div><div class="list" id="bins"></div></div></div></div>`;
     const send = async (q) => {
       q = (q || $("#cin").value).trim();
       if (!q) return;
@@ -29,8 +29,8 @@ export default {
       try {
         const r = await ctx.api("/beyin/sohbet", { mesaj: q, gecmis: hist.slice(0, -1) });
         hist.push({ role: "assistant", content: r.cevap, src: r.kaynak });
-        if (tts && window.speechSynthesis) { speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(r.cevap.replace(/[*_•#]/g, "").slice(0, 600)); u.lang = "tr-TR"; speechSynthesis.speak(u); }
-      } catch (e) { hist.push({ role: "assistant", content: "Yanıt alınamadı: " + e.message, src: "hata" }); }
+        if (tts && window.speechSynthesis) { speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(r.cevap.replace(/[*_•#]/g, "").slice(0, 600)); u.lang = "en-US"; speechSynthesis.speak(u); }
+      } catch (e) { hist.push({ role: "assistant", content: "No reply: " + e.message, src: "error" }); }
       this.renderLog();
     };
     $("#csend").onclick = () => send();
@@ -38,14 +38,14 @@ export default {
     $$(".chip").forEach((c) => c.onclick = () => send(c.textContent));
     $("#tts").onclick = () => { tts = !tts; $("#tts").classList.toggle("on", tts); };
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR) { $("#mic").title = "Bu tarayıcı ses tanımayı desteklemiyor (Chrome/Edge önerilir)"; $("#mic").style.opacity = ".4"; }
+    if (!SR) { $("#mic").title = "This browser does not support speech recognition (Chrome/Edge recommended)"; $("#mic").style.opacity = ".4"; }
     $("#mic").onclick = () => {
-      if (!SR) { ctx.toast("Ses tanıma için Chrome veya Edge kullan", "uyari"); return; }
-      const rec = new SR(); rec.lang = "tr-TR"; rec.interimResults = true;
+      if (!SR) { ctx.toast("Use Chrome or Edge for speech recognition", "uyari"); return; }
+      const rec = new SR(); rec.lang = "en-US"; rec.interimResults = true;
       $("#mic").classList.add("on");
       rec.onresult = (e) => { const t = [...e.results].map((r) => r[0].transcript).join(" "); $("#cin").value = t; if (e.results[e.results.length - 1].isFinal) { rec.stop(); send(t); } };
       rec.onend = () => $("#mic").classList.remove("on");
-      rec.onerror = () => { $("#mic").classList.remove("on"); ctx.toast("Mikrofon izni gerekli", "uyari"); };
+      rec.onerror = () => { $("#mic").classList.remove("on"); ctx.toast("Microphone permission required", "uyari"); };
       rec.start();
     };
     this.renderLog();
@@ -60,14 +60,14 @@ export default {
   },
   async engine(ctx) {
     const s = await ctx.api("/beyin/durum");
-    $("#bst").textContent = s.ok ? `Ollama · ${s.model}` : "yerel analist modu";
+    $("#bst").textContent = s.ok ? `Ollama · ${s.model}` : "local analyst mode";
     $("#aim").innerHTML = s.ok
-      ? `<div><span class="st st-calisiyor">Ollama bağlı</span></div><div class="muted mt">${esc(s.url)}</div>
+      ? `<div><span class="st st-calisiyor">Ollama connected</span></div><div class="muted mt">${esc(s.url)}</div>
          <div class="mt"><select class="inp" id="msel" style="width:100%">${s.models.map((m) => `<option ${m === s.model ? "selected" : ""}>${esc(m)}</option>`).join("")}</select></div>
-         <div class="muted mt" style="font-size:12px">Tamamen yerel ve ücretsiz. Her soruya bölgenin canlı durum özeti eklenir.</div>`
-      : `<div><span class="st st-ariza">Ollama bulunamadı</span></div><div class="muted mt" style="font-size:12.5px">${esc(s.error || "")}</div>
-         <div class="muted mt" style="font-size:12.5px">Şu an <b>yerel analist</b> yanıt veriyor: enerji, karbon, lojistik, atık, su ve olay sorularını gerçek verilerle cevaplar. Serbest sohbet için bilgisayarında Ollama'yı çalıştır:</div>
-         <div class="code mt">ollama pull llama3.2</div><button class="btn sm mt" id="rchk">Yeniden dene</button>`;
+         <div class="muted mt" style="font-size:12px">Fully local and free. A live summary of the zone is attached to every question.</div>`
+      : `<div><span class="st st-ariza">Ollama not found</span></div><div class="muted mt" style="font-size:12.5px">${esc(s.error || "")}</div>
+         <div class="muted mt" style="font-size:12.5px">Right now the <b>local analyst</b> is answering: it handles energy, carbon, logistics, waste, water and incident questions with live data. For free-form chat, run Ollama on your computer:</div>
+         <div class="code mt">ollama pull llama3.2</div><button class="btn sm mt" id="rchk">Retry</button>`;
     const ms = $("#msel"); if (ms) ms.onchange = async () => { await ctx.api("/beyin/model", { model: ms.value }); this.engine(ctx); };
     const rc = $("#rchk"); if (rc) rc.onclick = () => this.engine(ctx);
   },
@@ -75,7 +75,7 @@ export default {
     const log = $("#clog");
     if (!log) return;
     log.innerHTML = hist.length ? hist.map((m) => `<div class="msg ${m.role === "user" ? "u" : "a"}">${m.role === "user" ? esc(m.content) : md(m.content)}${m.src ? `<span class="src">${esc(m.src)}</span>` : ""}</div>`).join("")
-      : `<div class="msg a">Merhaba. Ben NEXUS OSB'nin Bölge Beyni'yim. 30 tesisin enerji, lojistik, atık, karbon, su ve güvenlik verisini anlık izliyorum. Bir soru sor ya da yukarıdaki önerilerden birini seç.</div>`;
+      : `<div class="msg a">Hello. I am the Zone Brain of NEXUS OSB. I watch the energy, logistics, waste, carbon, water and safety data of 30 sites in real time. Ask a question or pick one of the suggestions above.</div>`;
     log.scrollTop = log.scrollHeight;
   },
 };

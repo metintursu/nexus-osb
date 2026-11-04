@@ -1,4 +1,4 @@
-"""NEXUS OSB dünya modeli — tüm alt sistemleri her simülasyon dakikasında birlikte çalıştırır."""
+"""NEXUS OSB world model — runs every subsystem together on each simulated minute."""
 import math
 import random
 
@@ -18,6 +18,8 @@ from .autopilot import Autopilot
 from .agents import Agents
 from . import disaster as afet
 
+STATUS_EN = {"calisiyor": "running", "bosta": "off shift", "ariza": "fault", "bakim": "maintenance", "durdu": "stopped"}
+
 DEFAULT_MODS = {"talep": {}, "gaz": 1.0, "gaz_fiyat": 1.0, "fiyat": 1.0, "sogutma": 1.0, "su": 1.0, "panel": 1.0,
                 "lojistik": 1.0}
 
@@ -26,12 +28,12 @@ class World:
     def __init__(self, seed=42, logger=None, cfg=None):
         self.cfg = cfg or {}
         geo.configure(self.cfg)
-        self.name = self.cfg.get("ad") or "NEXUS Demo OSB"
+        self.name = self.cfg.get("ad") or "NEXUS Demo Zone"
         self.rng = random.Random(seed)
         self.minute = 0
         self.logger = logger
         self.on_day = None
-        self.events = []                       # son olay akışı (UI)
+        self.events = []                       # recent event feed (UI)
         self.mods = {k: (dict(v) if isinstance(v, dict) else v) for k, v in DEFAULT_MODS.items()}
         self.outage = False
         self.scenario = None                   # {"key","bitis","baslangic"}
@@ -41,9 +43,9 @@ class World:
         self.disaster = None
         self.last_disaster = None
         self.wind = {"aci": self.rng.uniform(0, 2 * math.pi), "hiz": 4.0}
-        self.wx = {"sogutma": 1.0, "isitma": 1.0, "su": 1.0}    # gerçek hava etkisi
-        self.real_prices = None      # 24 saatlik gerçek elektrik fiyatı ₺/kWh (dağıtım dahil) veya None
-        self.real_weather = None     # 24 saatlik gerçek hava {bulut, sicaklik, ruzgar, ruzgar_yon} veya None
+        self.wx = {"sogutma": 1.0, "isitma": 1.0, "su": 1.0}    # real-weather multipliers
+        self.real_prices = None      # 24-hour real electricity price ₺/kWh (incl. network fees) or None
+        self.real_weather = None     # 24-hour real weather {bulut, sicaklik, ruzgar, ruzgar_yon} or None
         self._build()
         self.energy = Energy(self)
         self.water = Water(self)
@@ -59,9 +61,9 @@ class World:
         self.days = []
         self.insights = []
         self.symbiosis.compute_opps()
-        # açılışta en verimli üç bağlantı hazır
-        for pick in (lambda o: o["tasima"] == "boru hattı", lambda o: o["atik"] == "organik",
-                     lambda o: o["tasima"] == "kamyon"):
+        # start with the three best links already running
+        for pick in (lambda o: o["tasima"] == "pipeline", lambda o: o["atik"] == "organik",
+                     lambda o: o["tasima"] == "truck"):
             cand = [o for o in self.symbiosis.opps if pick(o)]
             if cand:
                 self.symbiosis.approve(cand[0]["id"])
@@ -71,8 +73,8 @@ class World:
     def _build(self):
         rng = self.rng
         parcels = geo.parcels()
-        hq = parcels.pop(0)                    # Ada 1-1, ilk parsel: OSB Yönetim + İtfaiye
-        self.hq = {"ad": "OSB Yönetim · İtfaiye · Acil Durum Merkezi", **hq}
+        hq = parcels.pop(0)                    # Block 1-1, first parcel: zone management + fire station
+        self.hq = {"ad": "Zone Management · Fire Station · Emergency Centre", **hq}
         hcx, hcy = hq["x"] + hq["w"] / 2, hq["y"] + hq["h"] / 2
         self.hq_seg = geo.access_segment(hcx, hcy, hq["c"], hq["r"])
         fac = geo.facilities()["aritma"]
@@ -101,7 +103,7 @@ class World:
                 lo, hi = SECTORS[sek]["calisan"]
                 emp = int(t.get("calisan") or (int(rng.randint(lo, hi) / 10) * 10))
                 vard = int(t.get("vardiya") or rng.choice(SECTORS[sek]["vardiya"]))
-                ad = (t.get("ad") or f"Tesis {i+1}").strip()[:40]
+                ad = (t.get("ad") or f"Site {i+1}").strip()[:40]
                 self.factories.append(Factory(f"F{i+1:02d}", ad, sek, p, max(10, emp), max(1, min(3, vard)), rng))
             used = {(f.parcel["c"], f.parcel["r"], f.parcel["slot"]) for f in self.factories}
             parcels = [p for p in rest if (p["c"], p["r"], p["slot"]) not in used]
@@ -122,7 +124,7 @@ class World:
                 emp = int(rng.randint(lo, hi) / 10) * 10
                 ad = f"{names[i % len(names)]} {NAME_SUFFIX[s]}"
                 self.factories.append(Factory(f"F{i+1:02d}", ad, s, p, emp, rng.choice(SECTORS[s]["vardiya"]), rng))
-            bio = Factory(f"F{len(self.factories)+1:02d}", "OSB Biyogaz Tesisi", "biyogaz", bio_parcel, 25, 3, rng)
+            bio = Factory(f"F{len(self.factories)+1:02d}", "Zone Biogas Plant", "biyogaz", bio_parcel, 25, 3, rng)
             self.factories.append(bio)
         doks = [f for f in self.factories if f.sektor in ("dokum", "metal")] or self.factories
         self.h2_parcel = None
@@ -146,7 +148,7 @@ class World:
     @property
     def period(self):
         if self.real_prices:
-            # gerçek fiyatta dilim, günün fiyat sıralamasından türetilir: en pahalı 5 saat puant, en ucuz 8 saat gece
+            # with real prices the band comes from the day's price ranking: 5 most expensive hours = peak, 8 cheapest = night
             p = self.real_prices
             cur = p[int(self.hour) % 24]
             rank = sum(1 for x in p if x < cur)
@@ -183,7 +185,7 @@ class World:
         if t is not None:
             self.wx = {"sogutma": 1 + max(0.0, t - 24) * 0.011, "isitma": 1 + max(0.0, 12 - t) * 0.012, "su": 1 + max(0.0, t - 25) * 0.015}
         if ws is not None and wd is not None:
-            b = math.radians(wd + 180)          # meteorolojik "geldiği yön" → gittiği yön
+            b = math.radians(wd + 180)          # meteorological "coming from" → heading towards
             self.wind = {"aci": math.atan2(-math.cos(b), math.sin(b)), "hiz": max(0.5, ws)}
 
     @property
@@ -194,7 +196,7 @@ class World:
         m = self.minute % 1440
         return f"{m // 60:02d}:{m % 60:02d}"
 
-    # ------------------------------------------------------------------ kayıt
+    # ------------------------------------------------------------------ logging
     def log(self, kind, text, data=None):
         ev = {"t": self.minute, "saat": self.clock(), "gun": self.day, "tur": kind, "metin": text}
         self.events.append(ev)
@@ -209,10 +211,10 @@ class World:
             return self.fmap[key].ad
         if kind == "g":
             return geo.GATES[key]["ad"]
-        return "Lojistik Merkezi"
+        return "Logistics Hub"
 
     def export_cfg(self):
-        """Mevcut bölgeyi Bölge Tasarımcısı'nın okuyabileceği ayar sözlüğüne çevirir."""
+        """Exports the current zone as a config dict the Zone Designer can read."""
         base = {k: v for k, v in self.cfg.items() if k != "tesisler"}
         base.setdefault("ad", self.name)
         base.setdefault("sutun", geo.COLS)
@@ -228,17 +230,17 @@ class World:
     def start_scenario(self, key):
         if key not in SCENARIOS:
             return None
-        self.stop_scenario("Yeni senaryo başlatıldı")
+        self.stop_scenario("New scenario started")
         sc = SCENARIOS[key]
         self.scenario = {"key": key, "ad": sc["ad"], "baslangic": self.minute, "bitis": self.minute + sc["sure"]}
         m = self.mods
         if key == "sebeke_kesintisi":
             self.outage = True
-            self.incidents.raise_once("kesinti", "enerji", "Ulusal şebeke beslemesi kesildi", "kritik",
-                                      detay="Ana İndirici Merkez girişinde gerilim yok; ada modu devrede",
-                                      aksiyonlar=["Kritik yükler (gıda soğuk zincir, kimya, arıtma) GES+batarya ile besleniyor",
-                                                  "Kritik olmayan tesislere kontrollü duruş talimatı gönderildi",
-                                                  "Dağıtım şirketinden tahmini dönüş süresi iste"])
+            self.incidents.raise_once("kesinti", "enerji", "National grid supply lost", "kritik",
+                                      detay="No voltage at the main substation; island mode active",
+                                      aksiyonlar=["Critical loads (food cold chain, chemicals, wastewater) running on solar + battery",
+                                                  "Controlled-stop order sent to non-critical sites",
+                                                  "Ask the grid operator for an estimated restoration time"])
         elif key == "enerji_zammi":
             m["fiyat"] = 1.4
         elif key == "dogalgaz_kisinti":
@@ -255,10 +257,10 @@ class World:
             afet.start_quake(self)
         elif key == "kimyasal_sizinti":
             afet.start_leak(self)
-        self.log("senaryo", f"Senaryo başladı: {sc['ad']}")
+        self.log("senaryo", f"Scenario started: {sc['ad']}")
         return self.scenario
 
-    def stop_scenario(self, why="Senaryo süresi doldu"):
+    def stop_scenario(self, why="Scenario time is up"):
         if not self.scenario:
             return
         key = self.scenario["key"]
@@ -266,8 +268,8 @@ class World:
         self.mods = {k: (dict(v) if isinstance(v, dict) else v) for k, v in DEFAULT_MODS.items()}
         if key == "sebeke_kesintisi":
             self.outage = False
-            self.incidents.resolve_key("kesinti", "Şebeke beslemesi geri geldi")
-            self.incidents.resolve_key("karsilanamayan", "Şebeke beslemesi geri geldi")
+            self.incidents.resolve_key("kesinti", "Grid supply restored")
+            self.incidents.resolve_key("karsilanamayan", "Grid supply restored")
         if key == "liman_grevi":
             self.logistics.gate_blocked[self._port_gate()] = False
         if key in ("deprem", "kimyasal_sizinti"):
@@ -275,7 +277,7 @@ class World:
         self.log("senaryo", f"Senaryo bitti: {self.scenario['ad']} ({why})")
         self.scenario = None
 
-    # ------------------------------------------------------------------ ana döngü
+    # ------------------------------------------------------------------ main loop
     def tick(self):
         self.minute += 1
         if self.scenario and self.minute >= self.scenario["bitis"]:
@@ -332,7 +334,7 @@ class World:
             del self.days[0]
         if self.on_day:
             self.on_day(summary)
-        self.log("rapor", f"Gün {summary['gun']} kapandı · {summary['enerji_mwh']} MWh · {summary['co2_t']} tCO2 · sağlık {summary['saglik']}")
+        self.log("rapor", f"Day {summary['gun']} closed · {summary['enerji_mwh']} MWh · {summary['co2_t']} tCO2 · health {summary['saglik']}")
         for f in self.factories:
             f.reset_day()
         self.energy.reset_day()
@@ -350,7 +352,7 @@ class World:
         k2 = sum(f.today["kapsam2_kg"] for f in fs)
         start = getattr(self, "_log_start_extra", {"lojistik_kg": 0.0})
         lj = self.carbon_extra["lojistik_kg"] - start["lojistik_kg"]
-        tesis = self.energy.facility_kw  # anlık
+        tesis = self.energy.facility_kw  # instantaneous
         avoided = (self.energy.today["kacinilan_co2_kg"] + self.hydrogen.today["kacinilan_co2_kg"]) / 1000 + self.symbiosis.today["co2_t"]
         rows = []
         for f in fs:
@@ -371,7 +373,7 @@ class World:
                 "anlik_th": round(sum(f.co2_kgh for f in fs) / 1000, 2), "sebeke_yogunluk": self.grid_co2,
                 "fabrikalar": rows, "baz_gun_t": base, "gunluk": hist,
                 "skdm_toplam_eur": sk, "skdm_toplam_tl": round(sk * EUR_TL), "ab_fiyat": EU_CO2_EUR,
-                "hedef_2030": "-%30 (baz güne göre)"}
+                "hedef_2030": "-30% (vs. baseline day)"}
 
     # ------------------------------------------------------------------ skorlar
     def health(self):
@@ -430,60 +432,60 @@ class World:
                 "olay": sum(1 for i in self.incidents.items if i["zaman"] >= (self.minute // 1440 - (1 if final else 0)) * 1440),
                 "saglik": h["skor"]}
 
-    # ------------------------------------------------------------------ Bölge Beyni (kural tabanlı içgörüler)
+    # ------------------------------------------------------------------ Zone Brain (rule-based insights)
     def _insights(self):
         out = []
         e, lg, sy, wt = self.energy, self.logistics, self.symbiosis, self.water
         worst = max(e.tms, key=lambda t: t["oran"])
         if worst["oran"] > 0.93:
-            out.append({"seviye": "uyari", "modul": "enerji", "baslik": f"{worst['id']} sınırda: %{worst['oran']*100:.0f}",
-                        "metin": f"{worst['id']} trafosuna bağlı {len(worst['fabrikalar'])} tesis {worst['yuk_kw']/1000:.1f} MW çekiyor. "
-                                 "Esnek yüklerin 30–60 dk kaydırılması aşırı yük olayını önler.",
-                        "aksiyon": {"tip": "dr", "etiket": "Talep kaydırmayı başlat"}})
+            out.append({"seviye": "uyari", "modul": "enerji", "baslik": f"{worst['id']} near its limit: {worst['oran']*100:.0f}%",
+                        "metin": f"The {len(worst['fabrikalar'])} sites on {worst['id']} draw {worst['yuk_kw']/1000:.1f} MW. "
+                                 "Shifting flexible loads by 30–60 min prevents an overload event.",
+                        "aksiyon": {"tip": "dr", "etiket": "Start load shifting"}})
         if e.mode == "kapali":
-            out.append({"seviye": "uyari", "modul": "enerji", "baslik": "Batarya devre dışı",
-                        "metin": "BESS kapalıyken puant saatlerinde tüm yük şebekeden çekiliyor. Otomatik moda almak günde puant farkı kadar kazandırır.",
-                        "aksiyon": {"tip": "bess", "etiket": "Bataryayı otomatiğe al"}})
+            out.append({"seviye": "uyari", "modul": "enerji", "baslik": "Battery disabled",
+                        "metin": "With the BESS off, the whole peak-hour load comes from the grid. Auto mode saves the peak price gap every day.",
+                        "aksiyon": {"tip": "bess", "etiket": "Set battery to auto"}})
         if self.period == "gunduz" and e.solar_kw > 2000 and e.soc / e.bess_kwh < 0.55:
-            out.append({"seviye": "bilgi", "modul": "enerji", "baslik": "Puanta hazırlık",
-                        "metin": f"Batarya %{e.soc/e.bess_kwh*100:.0f}. 17:00 puant dilimi öncesinde GES fazlasıyla doldurulması önerilir."})
+            out.append({"seviye": "bilgi", "modul": "enerji", "baslik": "Prepare for the peak",
+                        "metin": f"Battery at {e.soc/e.bess_kwh*100:.0f}%. Charging it with surplus solar before the 17:00 peak band is recommended."})
         er = lg.empty_ratio()
         if not lg.pool and er > 0.3:
-            out.append({"seviye": "uyari", "modul": "lojistik", "baslik": f"Kamyonların %{er*100:.0f}'i boş dolaşıyor",
-                        "metin": "Her teslimattan sonra araçlar depoya dönüyor. Ortak filo havuzu açılırsa araçlar en yakın yeni işe geçer; boş km, yakıt ve CO2 düşer.",
-                        "aksiyon": {"tip": "havuz", "etiket": "Ortak filo havuzunu aç"}})
+            out.append({"seviye": "uyari", "modul": "lojistik", "baslik": f"{er*100:.0f}% of truck km are driven empty",
+                        "metin": "Trucks return to the depot after every delivery. With the shared fleet pool, they take the nearest next job instead; empty km, fuel and CO2 drop.",
+                        "aksiyon": {"tip": "havuz", "etiket": "Open shared fleet pool"}})
         if sy.opps:
             o = sy.opps[0]
-            out.append({"seviye": "firsat", "modul": "simbiyoz", "baslik": f"{o['atik_ad']}: ayda ≈{o['aylik_kazanc_tl']/1000:,.0f} bin TL".replace(",", "."),
+            out.append({"seviye": "firsat", "modul": "simbiyoz", "baslik": f"{o['atik_ad']}: ≈₺{o['aylik_kazanc_tl']/1000:,.0f}k per month",
                         "metin": f"{o['ureten_ad']} → {o['alan_ad']} ({o['mesafe_km']} km, {o['tasima']}). "
-                                 f"Aylık {o['aylik_miktar']} {o['birim']} yeniden kullanım, {o['aylik_co2_t']} tCO2 kaçınım.",
-                        "aksiyon": {"tip": "simbiyoz", "id": o["id"], "etiket": "Bağlantıyı onayla"}})
+                                 f"{o['aylik_miktar']} {o['birim']} reused per month, {o['aylik_co2_t']} tCO2 avoided.",
+                        "aksiyon": {"tip": "simbiyoz", "id": o["id"], "etiket": "Approve link"}})
         if wt.util > 0.97 or wt.koi_out > 220:
-            out.append({"seviye": "uyari", "modul": "su", "baslik": f"Arıtma yüklenmesi %{wt.util*100:.0f}",
-                        "metin": f"Çıkış KOİ {wt.koi_out:.0f} mg/L. Gıda/kimya tesislerinin deşarjı dengeleme havuzuna kaydırılmalı."})
+            out.append({"seviye": "uyari", "modul": "su", "baslik": f"Wastewater plant at {wt.util*100:.0f}%",
+                        "metin": f"Outlet COD {wt.koi_out:.0f} mg/L. Food/chemical discharges should be diverted to the equalisation basin."})
         if wt.reuse < 0.2:
-            out.append({"seviye": "firsat", "modul": "su", "baslik": "Su geri kazanımı artırılabilir",
-                        "metin": f"Geri kazanım %{wt.reuse*100:.0f}. %25'e çıkarılırsa günde ≈{wt.inflow*24*0.15:,.0f} m³ temiz su tasarrufu.".replace(",", "."),
-                        "aksiyon": {"tip": "su", "etiket": "Geri kazanımı %25 yap"}})
+            out.append({"seviye": "firsat", "modul": "su", "baslik": "Water reuse can be increased",
+                        "metin": f"Reuse is at {wt.reuse*100:.0f}%. Raising it to 25% saves ≈{wt.inflow*24*0.15:,.0f} m³ of fresh water per day.",
+                        "aksiyon": {"tip": "su", "etiket": "Set reuse to 25%"}})
         m = self.market.matches()
         if m:
             x = m[0]
-            out.append({"seviye": "firsat", "modul": "pazaryeri", "baslik": f"Kapasite eşleşmesi: {x['kaynak']}",
-                        "metin": f"{x['veren_ad']} atıl kapasitesi {x['isteyen_ad']} talebini karşılıyor · {x['miktar']} {x['birim']} · tahmini tasarruf {x['tasarruf_tl']:,} TL".replace(",", "."),
-                        "aksiyon": {"tip": "pazar", "teklif": x["teklif"], "talep": x["talep"], "etiket": "Sözleşmeyi kur"}})
+            out.append({"seviye": "firsat", "modul": "pazaryeri", "baslik": f"Capacity match: {x['kaynak']}",
+                        "metin": f"Idle capacity at {x['veren_ad']} covers {x['isteyen_ad']}'s request · {x['miktar']} {x['birim']} · estimated saving ₺{x['tasarruf_tl']:,}",
+                        "aksiyon": {"tip": "pazar", "teklif": x["teklif"], "talep": x["talep"], "etiket": "Create contract"}})
         low = sorted([f for f in self.factories if f.status == "calisiyor" and f.sektor != "biyogaz"], key=lambda f: f.oee)[:1]
         for f in low:
             if f.oee < 0.7:
-                out.append({"seviye": "bilgi", "modul": "fabrika", "baslik": f"{f.ad}: OEE %{f.oee*100:.0f}",
-                            "metin": "Bölgedeki en düşük ekipman etkinliği. Dijital Usta kayıtlarıyla duruş nedenleri incelenmeli.",
+                out.append({"seviye": "bilgi", "modul": "fabrika", "baslik": f"{f.ad}: OEE {f.oee*100:.0f}%",
+                            "metin": "Lowest equipment effectiveness in the zone. Review downtime causes with the Digital Master records.",
                             "fabrika": f.id})
         crb = sorted(self.factories, key=lambda f: -f.co2_kgh)[0]
-        out.append({"seviye": "bilgi", "modul": "karbon", "baslik": f"En yüksek anlık emisyon: {crb.ad}",
-                    "metin": f"{crb.co2_kgh/1000:.1f} tCO2/saat. {'SKDM kapsamında — ihracatta karbon bedeli riski var.' if crb.s['skdm'] else 'Atık ısı geri kazanımı ve elektrifikasyon öncelikli adaylar.'}",
+        out.append({"seviye": "bilgi", "modul": "karbon", "baslik": f"Highest current emissions: {crb.ad}",
+                    "metin": f"{crb.co2_kgh/1000:.1f} tCO2/hour. {'Covered by EU CBAM — carbon cost risk on exports.' if crb.s['skdm'] else 'Waste-heat recovery and electrification are the top candidates.'}",
                     "fabrika": crb.id})
         return out
 
-    # ------------------------------------------------------------------ çıktılar
+    # ------------------------------------------------------------------ outputs
     def static(self):
         fac = geo.facilities()
         return {"harita": {"w": geo.W, "h": geo.H, "xs": geo.XS, "ys": geo.YS, "yollar": geo.roads(), "olcek_km": geo.UNIT_KM},
@@ -491,7 +493,7 @@ class World:
                 "bos_parseller": self.empty_parcels, "fabrikalar": [f.static() for f in self.factories],
                 "sektorler": {k: {"ad": v["ad"], "renk": v["renk"], "kisa": v["kisa"]} for k, v in SECTORS.items()},
                 "atiklar": WASTE, "senaryolar": SCENARIOS, "sozlesme_kw": self.energy.contract_kw,
-                "hidrojen": {"ad": "Hidrojen Vadisi · elektrolizör + 12 MWp GES", **self.h2_parcel} if self.h2_parcel else None,
+                "hidrojen": {"ad": "Hydrogen Valley · electrolyser + 12 MWp solar", **self.h2_parcel} if self.h2_parcel else None,
                 "bolge_ad": self.name, "ges_kwp": self.energy.ges_kwp, "bess_kwh": self.energy.bess_kwh,
                 "ustalar": [{"id": m["id"], "ad": m["ad"]} for m in self.masters.items], "filo": len(self.logistics.trucks)}
 
@@ -518,24 +520,24 @@ class World:
         return lv
 
     def context_text(self):
-        """Bölge Beyni (LLM) için kısa durum özeti."""
+        """Short status summary for the Zone Brain (LLM)."""
         k = self.kpis()
         e = self.energy
         h = self.health()
-        lines = [f"Zaman: Gün {self.day} {self.clock()} · tarife dilimi {self.period} ({self.tariff:.2f} TL/kWh)",
-                 f"Bölge sağlık skoru {h['skor']}/100 · alt skorlar {h['parcalar']}",
-                 f"Yük {k['guc_mw']} MW, GES {k['ges_mw']} MW, şebeke {k['sebeke_mw']} MW, batarya %{k['soc']*100:.0f}, sözleşme {e.contract_kw/1000:.1f} MW",
-                 "Trafolar: " + ", ".join(f"{t['id']} %{t['oran']*100:.0f}" for t in e.tms),
-                 f"Bugün: enerji {k['enerji_mwh']} MWh, fatura {k['fatura_tl']:,} TL, CO2 {k['co2_t']} t, ciro {k['ciro_tl']:,} TL, kaçınılan CO2 {k['kacinilan_t']} t",
-                 f"Lojistik: {k['kamyon']} aktif kamyon, boş km oranı %{self.logistics.empty_ratio()*100:.0f}, ortak havuz {'açık' if self.logistics.pool else 'kapalı'}",
-                 f"Arıtma: {self.water.inflow:.0f} m3/h, yüklenme %{self.water.util*100:.0f}, çıkış KOİ {self.water.koi_out:.0f} mg/L, geri kazanım %{self.water.reuse*100:.0f}",
-                 f"Simbiyoz: {sum(1 for l in self.symbiosis.links if l['aktif'])} aktif bağlantı, toplam kazanç {self.symbiosis.total['kazanc_tl']:,.0f} TL",
-                 f"Senaryo: {self.scenario['ad'] if self.scenario else 'yok'}" + (f" · afet: {self.disaster['tip']}" if self.disaster else ""),
-                 f"Otopilot: {'açık' if self.autopilot.enabled else 'kapalı'} ({self.autopilot.stats['karar']} karar) · ajan anlaşması {self.agents.stats['anlasma']}",
-                 f"Hidrojen: depo {self.hydrogen.store_kg:.0f} kg, döküm/metal gaz ikamesi %{self.hydrogen.frac*100:.0f}",
-                 f"Usta havuzu: {sum(1 for m in self.masters.items if m['durum'] == 'musait')}/{len(self.masters.items)} müsait, kazanılan duruş {self.masters.total['kazanilan_dk']:.0f} dk",
-                 "Açık olaylar: " + ("; ".join(f"[{i['seviye']}] {i['baslik']} {i['fabrika_ad'] or ''}" for i in self.incidents.open()[:8]) or "yok"),
-                 "Fabrikalar (ad, sektör, durum, kW, OEE, tCO2/h): " + "; ".join(
-                     f"{f.ad} ({f.s['kisa']}, {f.status}, {f.power_kw:.0f}, {f.oee*100:.0f}%, {f.co2_kgh/1000:.2f})" for f in self.factories),
-                 "Öne çıkan içgörüler: " + " | ".join(i["baslik"] for i in self.insights[:6])]
+        lines = [f"Time: day {self.day} {self.clock()} · tariff band {dict(gece='night', gunduz='day', puant='peak')[self.period]} ({self.tariff:.2f} TRY/kWh)",
+                 f"Zone health score {h['skor']}/100 · sub-scores {h['parcalar']} (enerji=energy, lojistik=logistics, dongusel=circularity, guvenlik=safety, su=water, verimlilik=efficiency)",
+                 f"Load {k['guc_mw']} MW, solar {k['ges_mw']} MW, grid {k['sebeke_mw']} MW, battery {k['soc']*100:.0f}%, contract {e.contract_kw/1000:.1f} MW",
+                 "Substations: " + ", ".join(f"{t['id']} {t['oran']*100:.0f}%" for t in e.tms),
+                 f"Today: energy {k['enerji_mwh']} MWh, bill {k['fatura_tl']:,} TRY, CO2 {k['co2_t']} t, revenue {k['ciro_tl']:,} TRY, CO2 avoided {k['kacinilan_t']} t",
+                 f"Logistics: {k['kamyon']} active trucks, empty-km share {self.logistics.empty_ratio()*100:.0f}%, shared pool {'on' if self.logistics.pool else 'off'}",
+                 f"Wastewater: {self.water.inflow:.0f} m3/h, load {self.water.util*100:.0f}%, outlet COD {self.water.koi_out:.0f} mg/L, reuse {self.water.reuse*100:.0f}%",
+                 f"Symbiosis: {sum(1 for l in self.symbiosis.links if l['aktif'])} active links, total gain {self.symbiosis.total['kazanc_tl']:,.0f} TRY",
+                 f"Scenario: {self.scenario['ad'] if self.scenario else 'none'}" + (f" · disaster: {self.disaster['tip']}" if self.disaster else ""),
+                 f"Autopilot: {'on' if self.autopilot.enabled else 'off'} ({self.autopilot.stats['karar']} decisions) · agent deals {self.agents.stats['anlasma']}",
+                 f"Hydrogen: store {self.hydrogen.store_kg:.0f} kg, foundry/metal gas substitution {self.hydrogen.frac*100:.0f}%",
+                 f"Technician pool: {sum(1 for m in self.masters.items if m['durum'] == 'musait')}/{len(self.masters.items)} available, downtime saved {self.masters.total['kazanilan_dk']:.0f} min",
+                 "Open incidents: " + ("; ".join(f"[{i['seviye']}] {i['baslik']} {i['fabrika_ad'] or ''}" for i in self.incidents.open()[:8]) or "none"),
+                 "Plants (name, sector, status, kW, OEE, tCO2/h): " + "; ".join(
+                     f"{f.ad} ({f.s['kisa']}, {STATUS_EN.get(f.status, f.status)}, {f.power_kw:.0f}, {f.oee*100:.0f}%, {f.co2_kgh/1000:.2f})" for f in self.factories),
+                 "Key insights: " + " | ".join(i["baslik"] for i in self.insights[:6])]
         return "\n".join(lines)

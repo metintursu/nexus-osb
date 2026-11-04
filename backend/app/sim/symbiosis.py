@@ -1,12 +1,12 @@
-"""Endüstriyel simbiyoz: bir tesisin atığı, diğerinin hammaddesi.
+"""Industrial symbiosis: one plant's waste is another plant's raw material.
 
-Fırsatları sürekli tarar, onaylanan bağlantıları kamyon (veya ısı için boru hattı) ile işletir,
-kazanılan TL, kaçınılan CO2 ve düzenli depolamadan kurtarılan tonu izler.
+Continuously scans for opportunities, runs approved links by truck (or pipeline for heat),
+and tracks money earned, CO2 avoided and tonnes diverted from landfill.
 """
 from . import geo
 from .data import WASTE, BERTARAF_TL_T, TRUCK_LOAD_T, HEAT_PIPE_MAX_UNITS, DIESEL_TL_KM
 
-PIPE_TL_PER_UNIT = 85000   # 10 m izoleli boru hattı yatırımı (TL)
+PIPE_TL_PER_UNIT = 85000   # investment for 10 m of insulated pipeline (TRY)
 
 
 class Symbiosis:
@@ -59,7 +59,7 @@ class Symbiosis:
                                   "atik": wt, "atik_ad": info["ad"], "birim": info["birim"], "mesafe_km": round(km, 2),
                                   "aylik_miktar": round(monthly, 1), "aylik_kazanc_tl": round(save),
                                   "aylik_co2_t": round(monthly * info["co2"], 1), "yatirim_tl": round(capex),
-                                  "geri_odeme_ay": payback, "tasima": "boru hattı" if info["boru"] else "kamyon"})
+                                  "geri_odeme_ay": payback, "tasima": "pipeline" if info["boru"] else "truck"})
                 cands.sort(key=lambda c: -c["aylik_kazanc_tl"])
                 out.extend(cands[:2])
         out.sort(key=lambda c: -c["aylik_kazanc_tl"])
@@ -82,14 +82,14 @@ class Symbiosis:
                 "kazanc_tl": 0.0, "co2_t": 0.0, "sefer": 0, "bekleyen": False}
         self.links.append(link)
         self.opps = [x for x in self.opps if not (x["ureten"] == o["ureten"] and x["atik"] == o["atik"])]
-        self.w.log("simbiyoz", f"Simbiyoz bağlantısı kuruldu: {o['ureten_ad']} → {o['alan_ad']} ({o['atik_ad']})")
+        self.w.log("simbiyoz", f"Symbiosis link created: {o['ureten_ad']} → {o['alan_ad']} ({o['atik_ad']})")
         return link
 
     def stop(self, lid):
         for l in self.links:
             if l["lid"] == lid and l["aktif"]:
                 l["aktif"] = False
-                self.w.log("simbiyoz", f"Simbiyoz bağlantısı durduruldu: {l['lid']}")
+                self.w.log("simbiyoz", f"Symbiosis link stopped: {l['lid']}")
                 return l
         return None
 
@@ -140,7 +140,7 @@ class Symbiosis:
             self._credit(l, order.yuk)
 
     def daily_disposal(self):
-        """Gün sonu: bağlantısı olmayan stoklar bertarafa gider."""
+        """End of day: stock without a link goes to disposal."""
         for f in self.w.factories:
             for wt, amt in f.waste_stock.items():
                 if self._linked(f.id, wt) or amt <= 0:

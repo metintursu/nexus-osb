@@ -7,13 +7,13 @@ services:
     ports:
       - "8080:8080"
     environment:
-      # Bilgisayarındaki Ollama (ücretsiz, yerel). Model adı boşsa yüklü ilk model seçilir.
+      # Ollama on your computer (free, local). If the model name is empty, the first installed model is used.
       OLLAMA_URL: http://host.docker.internal:11434
       OLLAMA_MODEL: ""
       MQTT_HOST: mqtt
       MQTT_PORT: "1883"
       NEXUS_SEED: "42"
-      # EPİAŞ PTF için (isteğe bağlı): proje klasöründeki .env dosyasından okunur, şifre imaja girmez
+      # For the EPİAŞ day-ahead price (optional): read from the .env file in the project folder; the password never goes into the image
       EPIAS_KULLANICI: ${EPIAS_KULLANICI:-}
       EPIAS_SIFRE: ${EPIAS_SIFRE:-}
     extra_hosts:

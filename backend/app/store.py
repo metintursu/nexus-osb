@@ -1,4 +1,4 @@
-"""Kalıcı kayıt: olay akışı ve gün sonu raporları SQLite'a yazılır (/data/nexus.db)."""
+"""Persistent log: event stream and end-of-day reports are written to SQLite (/data/nexus.db)."""
 import json
 import os
 import sqlite3

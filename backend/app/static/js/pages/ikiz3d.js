@@ -1,4 +1,4 @@
-// NEXUS OSB — 3D Dijital İkiz (three.js, yerel kopya: /static/vendor)
+// NEXUS OSB — 3D Digital Twin (three.js, local copy: /static/vendor)
 import * as THREE from "../../vendor/three.module.min.js";
 import { $, $$, esc, fmt, STATUS, STATUS_COLOR } from "../ui.js";
 
@@ -11,9 +11,9 @@ export default {
   mount(root, ctx) {
     const W = ctx.world;
     root.innerHTML = `<div class="three-wrap" id="tw" style="height:${Math.max(560, window.innerHeight - 130)}px">
-      <div class="three-hud"><div class="seg"><button id="b-drone">🚁 Drone turu</button><button id="b-smoke" class="on">Duman</button><button id="b-flow" class="on">Akışlar</button><button id="b-reset">Kamerayı sıfırla</button></div></div>
+      <div class="three-hud"><div class="seg"><button id="b-drone">🚁 Drone tour</button><button id="b-smoke" class="on">Smoke</button><button id="b-flow" class="on">Flows</button><button id="b-reset">Reset camera</button></div></div>
       <div class="three-info" id="tinfo"></div><div class="map-tip" id="ttip"></div></div>
-      <div class="muted" style="font-size:12px;margin-top:8px">Sürükle: döndür · Sağ tık / Shift + sürükle: kaydır · Tekerlek: yakınlaş · Binaya tıkla: tesis ayrıntısı. Bina yüksekliği kurulu güçle, baca dumanı anlık emisyonla, çatı rengi durumla orantılıdır.</div>`;
+      <div class="muted" style="font-size:12px;margin-top:8px">Drag: rotate · Right-click / Shift + drag: pan · Wheel: zoom · Click a building: site details. Building height follows installed power, stack smoke follows current emissions, roof colour shows status.</div>`;
     const wrap = $("#tw");
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
@@ -28,7 +28,7 @@ export default {
     const sun = new THREE.DirectionalLight(0xffffff, 1.0); sun.position.set(900, 900, 200); sun.castShadow = true;
     sun.shadow.mapSize.set(2048, 2048); Object.assign(sun.shadow.camera, { left: -800, right: 800, top: 800, bottom: -800, near: 10, far: 3000 });
     sun.target.position.set(CX, 0, CZ); scene.add(sun, sun.target);
-    // zemin
+    // ground
     const ground = new THREE.Mesh(new THREE.PlaneGeometry(W.harita.w + 500, W.harita.h + 460), new THREE.MeshStandardMaterial({ color: 0x0a1221, roughness: 1 }));
     ground.rotation.x = -Math.PI / 2; ground.position.set(CX, -0.5, CZ); ground.receiveShadow = true; scene.add(ground);
     const M = W.harita;
@@ -45,7 +45,7 @@ export default {
       rd.position.set((x1 + x2) / 2, 0.3, (y1 + y2) / 2); rd.receiveShadow = true; scene.add(rd);
       const ln = new THREE.Mesh(new THREE.BoxGeometry(horiz ? len : 0.8, 0.2, horiz ? 0.8 : len), lineMat); ln.position.set((x1 + x2) / 2, 0.7, (y1 + y2) / 2); scene.add(ln);
     }
-    // fabrikalar
+    // factories
     const fobj = {}, pick = [];
     const chimneys = [];
     for (const f of W.fabrikalar) {
@@ -55,7 +55,7 @@ export default {
       body.position.y = H / 2 + 1; body.castShadow = body.receiveShadow = true; body.userData.fid = f.id;
       const roof = new THREE.Mesh(new THREE.BoxGeometry(f.w - 8, 1.6, f.h - 8), new THREE.MeshStandardMaterial({ color: 0x34d399, emissive: 0x34d399, emissiveIntensity: 0.4 }));
       roof.position.y = H + 1.8; roof.userData.fid = f.id;
-      // sheds (testere dişi çatı)
+      // sheds (saw-tooth roof)
       for (let i = 0; i < 4; i++) {
         const sh = new THREE.Mesh(new THREE.BoxGeometry((f.w - 14) / 4 - 2, 3, f.h - 14), new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.6 }));
         sh.position.set(-(f.w - 14) / 2 + (i + 0.5) * ((f.w - 14) / 4), H + 3.6, 0); g.add(sh);
@@ -71,7 +71,7 @@ export default {
         chimneys.push({ id: f.id, x: f.cx + f.w / 2 - 12, y: H + 25, z: f.cy - f.h / 2 + 12 });
       }
     }
-    // duman parçacıkları
+    // smoke particles
     const PER = 40, NP = chimneys.length * PER;
     const sp = new Float32Array(NP * 3), sa = new Float32Array(NP);
     const seeds = Array.from({ length: NP }, () => Math.random());
@@ -79,7 +79,7 @@ export default {
     const smokeTex = (() => { const c = document.createElement("canvas"); c.width = c.height = 64; const x = c.getContext("2d"); const gr = x.createRadialGradient(32, 32, 0, 32, 32, 32); gr.addColorStop(0, "rgba(220,225,235,.9)"); gr.addColorStop(1, "rgba(220,225,235,0)"); x.fillStyle = gr; x.fillRect(0, 0, 64, 64); return new THREE.CanvasTexture(c); })();
     const smoke = new THREE.Points(smokeGeo, new THREE.PointsMaterial({ size: 18, map: smokeTex, transparent: true, opacity: 0.35, depthWrite: false, color: 0xcbd5e1 }));
     scene.add(smoke);
-    // ortak tesisler
+    // shared facilities
     const T = W.tesisler;
     const ges = new THREE.Group(); const panelMat = new THREE.MeshStandardMaterial({ color: 0x1d4ed8, metalness: 0.6, roughness: 0.3, emissive: 0x1e3a8a, emissiveIntensity: 0.2 });
     for (let z = T.ges.y + 6; z < T.ges.y + T.ges.h - 6; z += 10) for (let x = T.ges.x + 6; x < T.ges.x + T.ges.w - 8; x += 15) {
@@ -111,7 +111,7 @@ export default {
         const p = new THREE.Mesh(new THREE.BoxGeometry(11, 0.5, 5), panelMat); p.position.set(x + 5, 3, z + 2); p.rotation.x = -0.35; scene.add(p);
       }
     }
-    // trafo merkezleri
+    // substations
     const tms = W.trafolar.map((tm) => {
       const tw = new THREE.Mesh(new THREE.CylinderGeometry(2, 4, 34, 6), new THREE.MeshStandardMaterial({ color: 0x64748b, metalness: 0.6 }));
       tw.position.set(tm.x, 17, tm.y); scene.add(tw);
@@ -119,12 +119,12 @@ export default {
       ring.rotation.x = Math.PI / 2; ring.position.set(tm.x, 36, tm.y); scene.add(ring);
       return ring;
     });
-    // araçlar (instanced)
+    // vehicles (instanced)
     const MAXV = 80;
     const veh = new THREE.InstancedMesh(new THREE.BoxGeometry(9, 5, 5), new THREE.MeshStandardMaterial({ roughness: 0.5 }), MAXV);
     veh.instanceMatrix.setUsage(THREE.DynamicDrawUsage); veh.castShadow = true; scene.add(veh);
     const vstate = {};
-    // akışlar + afet
+    // flows + disaster
     const flows = new THREE.Group(); scene.add(flows);
     const disasterG = new THREE.Group(); scene.add(disasterG);
     let flowKey = "", afKey = "";
@@ -135,7 +135,7 @@ export default {
     $("#b-flow").onclick = (e) => { st.flow = !st.flow; e.target.classList.toggle("on", st.flow); flows.visible = st.flow; };
     $("#b-reset").onclick = () => Object.assign(orbit, { r: R0, th: -0.75, ph: 0.92, tx: CX, tz: CZ });
 
-    // kamera kontrolü
+    // camera control
     const el = renderer.domElement;
     let drag = null;
     el.addEventListener("contextmenu", (e) => e.preventDefault());
@@ -169,9 +169,9 @@ export default {
       if (!id) { tip.style.display = "none"; el.style.cursor = "grab"; return; }
       el.style.cursor = "pointer";
       const f = fobj[id].f, lf = (ctx.live().f || []).find((x) => x.id === id) || {};
-      tip.innerHTML = `<b>${esc(f.ad)}</b><div class="muted" style="font-size:11.5px">${esc(f.sektor_ad)} · ${f.calisan} çalışan</div>
-        <div class="kv"><span>Durum</span><span style="color:${STATUS_COLOR[lf.d]}">${STATUS[lf.d] || "—"}</span><span>Güç</span><span class="num">${fmt.mw(lf.kw, 2)} MW</span>
-        <span>OEE</span><span class="num">${fmt.pct(lf.oee)}</span><span>Emisyon</span><span class="num">${fmt.n((lf.co2 || 0) / 1000, 2)} t/sa</span></div>`;
+      tip.innerHTML = `<b>${esc(f.ad)}</b><div class="muted" style="font-size:11.5px">${esc(f.sektor_ad)} · ${f.calisan} employees</div>
+        <div class="kv"><span>Status</span><span style="color:${STATUS_COLOR[lf.d]}">${STATUS[lf.d] || "—"}</span><span>Power</span><span class="num">${fmt.mw(lf.kw, 2)} MW</span>
+        <span>OEE</span><span class="num">${fmt.pct(lf.oee)}</span><span>Emissions</span><span class="num">${fmt.n((lf.co2 || 0) / 1000, 2)} t/h</span></div>`;
       const r = wrap.getBoundingClientRect();
       tip.style.display = "block";
       tip.style.left = Math.min(e.clientX - r.left + 14, r.width - 230) + "px";
@@ -201,7 +201,7 @@ export default {
       if (l.afet && l.afet.tip === "deprem" && l.t - l.afet.t0 < 30) { sx = (Math.random() - 0.5) * 9; sz = (Math.random() - 0.5) * 9; }
       cam.position.set(orbit.tx + orbit.r * Math.sin(orbit.ph) * Math.sin(orbit.th) + sx, orbit.r * Math.cos(orbit.ph), orbit.tz + orbit.r * Math.sin(orbit.ph) * Math.cos(orbit.th) + sz);
       cam.lookAt(orbit.tx, 0, orbit.tz);
-      // tesis durumları
+      // site states
       const lmap = {}; for (const x of l.f) lmap[x.id] = x;
       const night = 1 - day;
       const dmg = {}; if (l.afet && l.afet.tip === "deprem") for (const [id, lv] of l.afet.hasar) dmg[id] = lv;
@@ -212,7 +212,7 @@ export default {
         o.body.material.emissiveIntensity = (lf.d === "calisiyor" ? 0.12 + night * 0.5 : 0.03) * (st.hover === id ? 2.2 : 1);
         o.g.rotation.z = dmg[id] === "agir" ? 0.05 : dmg[id] === "orta" ? 0.02 : 0;
       }
-      // duman
+      // smoke
       smoke.visible = st.smoke;
       if (st.smoke) {
         const mx = Math.max(1, ...l.f.map((x) => x.co2));
@@ -231,14 +231,14 @@ export default {
         });
         smokeGeo.attributes.position.needsUpdate = true;
       }
-      // tesisler: GES, BESS, arıtma, H2, trafo
+      // facilities: solar, BESS, wastewater, H2, substation
       panelMat.emissiveIntensity = 0.1 + (l.e.ges / (W.ges_kwp || 18000)) * 0.6;
       bess.material.emissive.set(l.e.bess > 50 ? 0xfb923c : l.e.bess < -50 ? 0x34d399 : 0x14b8a6);
       bess.material.emissiveIntensity = 0.2 + 0.3 * Math.abs(Math.sin(now / 400));
       tanks.forEach((t) => { t.material.emissive.set(l.su.util > 1 ? 0xef4444 : 0x0ea5e9); });
       h2tanks.forEach((t) => { t.material.emissiveIntensity = 0.05 + (l.h2 ? l.h2.doluluk : 0) * 0.8; });
       tms.forEach((r, i) => { const u = l.e.tm[i]; r.material.color.set(l.kesinti ? 0x475569 : u > 1 ? 0xf87171 : u > 0.9 ? 0xfbbf24 : 0x34d399); r.rotation.z += dt * (0.5 + u * 2); });
-      // araçlar
+      // vehicles
       const list = (l.l && l.l.araclar) || [];
       const seen = new Set();
       let n = 0;
@@ -261,7 +261,7 @@ export default {
       }
       for (const id of Object.keys(vstate)) if (!seen.has(id)) delete vstate[id];
       veh.count = n; veh.instanceMatrix.needsUpdate = true; if (veh.instanceColor) veh.instanceColor.needsUpdate = true;
-      // simbiyoz akışları
+      // symbiosis flows
       const fk = JSON.stringify(l.s);
       if (fk !== flowKey) {
         flowKey = fk;
@@ -276,7 +276,7 @@ export default {
         }
       }
       flows.children.forEach((t, i) => { t.material.opacity = 0.45 + 0.4 * Math.abs(Math.sin(now / 600 + i)); });
-      // afet
+      // disaster
       const ak = l.afet ? l.afet.tip + l.afet.t0 : "";
       if (ak !== afKey) {
         afKey = ak; disasterG.clear();
@@ -305,13 +305,13 @@ export default {
   },
   info(l) {
     const el = $("#tinfo"); if (!el || !l) return;
-    el.innerHTML = `<div style="font-family:var(--f-head);font-weight:600;margin-bottom:4px">Gün ${l.gun} · ${l.saat}</div>
-      <div>⚡ Yük <b class="num">${fmt.mw(l.e.yuk, 1)} MW</b> · GES <b class="num">${fmt.mw(l.e.ges, 1)}</b></div>
-      <div>🔋 Batarya <b class="num">%${Math.round(l.e.soc * 100)}</b> · H₂ <b class="num">${l.h2 ? l.h2.stok : 0} kg</b></div>
-      <div>🚚 <b class="num">${l.l.aktif}</b> araç yolda · 🧰 <b class="num">${(l.l.araclar || []).filter((a) => a[5] === "usta").length}</b> usta görevde</div>
-      <div>🌫 <b class="num">${fmt.n(l.k.co2_anlik, 1)}</b> tCO₂/sa · rüzgâr ${l.ruzgar ? l.ruzgar.hiz : "—"} m/s</div>
-      ${l.afet ? `<div class="t-crit" style="margin-top:4px;font-weight:600">${l.afet.tip === "deprem" ? `🌍 M${l.afet.M} deprem` : "☣ Kimyasal sızıntı"} aktif</div>` : ""}
-      ${l.ap ? `<div class="t-ok" style="margin-top:4px">✈ Otopilot devrede</div>` : ""}`;
+    el.innerHTML = `<div style="font-family:var(--f-head);font-weight:600;margin-bottom:4px">Day ${l.gun} · ${l.saat}</div>
+      <div>⚡ Load <b class="num">${fmt.mw(l.e.yuk, 1)} MW</b> · Solar <b class="num">${fmt.mw(l.e.ges, 1)}</b></div>
+      <div>🔋 Battery <b class="num">${Math.round(l.e.soc * 100)}%</b> · H₂ <b class="num">${l.h2 ? l.h2.stok : 0} kg</b></div>
+      <div>🚚 <b class="num">${l.l.aktif}</b> vehicles on the road · 🧰 <b class="num">${(l.l.araclar || []).filter((a) => a[5] === "usta").length}</b> technicians on a job</div>
+      <div>🌫 <b class="num">${fmt.n(l.k.co2_anlik, 1)}</b> tCO₂/h · wind ${l.ruzgar ? l.ruzgar.hiz : "—"} m/s</div>
+      ${l.afet ? `<div class="t-crit" style="margin-top:4px;font-weight:600">${l.afet.tip === "deprem" ? `🌍 M${l.afet.M} earthquake` : "☣ Chemical leak"} active</div>` : ""}
+      ${l.ap ? `<div class="t-ok" style="margin-top:4px">✈ Autopilot active</div>` : ""}`;
   },
   update(l) { this.info(l); },
   unmount() { if (R) { R.stop(); R.ro.disconnect(); R.renderer.dispose(); R = null; } },

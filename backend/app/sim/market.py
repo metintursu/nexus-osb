@@ -1,4 +1,4 @@
-"""Kapasite pazaryeri: tesisler boş makine saati, depo, laboratuvar, parsel vb. paylaşır."""
+"""Capacity marketplace: sites share idle machine hours, storage, labs, parcels and more."""
 from .data import RESOURCES
 
 
@@ -15,20 +15,20 @@ class Market:
         for p in w.empty_parcels[:3]:
             self._n += 1
             area = int(p["w"] * p["h"] * 100 * 0.6)
-            self.offers.append({"id": f"T{self._n:04d}", "kaynak": "parsel", "ad": RESOURCES["parsel"][0] if "parsel" in RESOURCES else "Boş parsel",
-                                "birim": "m²·ay", "miktar": area, "fiyat": 95, "veren": "osb", "veren_ad": "OSB Yönetimi",
-                                "zaman": w.minute, "not": f"Ada {p['c']+1}-{p['r']+1} boş parsel, altyapı hazır"})
+            self.offers.append({"id": f"T{self._n:04d}", "kaynak": "parsel", "ad": RESOURCES["parsel"][0] if "parsel" in RESOURCES else "Vacant parcel",
+                                "birim": "m²·month", "miktar": area, "fiyat": 95, "veren": "osb", "veren_ad": "Zone Management",
+                                "zaman": w.minute, "not": f"Block {p['c']+1}-{p['r']+1} vacant parcel, utilities ready"})
 
     def _qty(self, key):
         u = RESOURCES[key][1]
         rng = self.w.rng
-        if u == "saat":
+        if u == "h":
             return rng.choice([20, 40, 60, 80, 120])
-        if u in ("m²·ay",):
+        if u in ("m²·month",):
             return rng.choice([300, 500, 800, 1200, 2000])
-        if u == "palet·ay":
+        if u == "pallet·month":
             return rng.choice([40, 80, 120, 200])
-        if u == "gün":
+        if u == "day":
             return rng.choice([5, 10, 20])
         return rng.choice([10, 20, 40])
 
@@ -43,7 +43,7 @@ class Market:
         self._n += 1
         self.offers.append({"id": f"T{self._n:04d}", "kaynak": key, "ad": ad, "birim": birim, "miktar": self._qty(key),
                             "fiyat": round(fiyat * rng.uniform(0.85, 1.05)), "veren": f.id, "veren_ad": f.ad,
-                            "zaman": w.minute, "not": f"Atıl kapasite · OEE %{f.oee*100:.0f}"})
+                            "zaman": w.minute, "not": f"Idle capacity · OEE {f.oee*100:.0f}%"})
 
     def _new_demand(self):
         w, rng = self.w, self.w.rng
@@ -56,8 +56,8 @@ class Market:
         self._n += 1
         self.demands.append({"id": f"I{self._n:04d}", "kaynak": key, "ad": ad, "birim": birim, "miktar": self._qty(key),
                              "azami_fiyat": round(fiyat * rng.uniform(1.0, 1.3)), "isteyen": f.id, "isteyen_ad": f.ad,
-                             "zaman": w.minute, "not": rng.choice(["Acil sipariş", "Kapasite açığı", "Bakım dönemi yedeği",
-                                                                    "Yeni müşteri projesi", "Sezonluk talep"])})
+                             "zaman": w.minute, "not": rng.choice(["Rush order", "Capacity shortfall", "Backup during maintenance",
+                                                                    "New customer project", "Seasonal demand"])})
 
     def tick(self):
         w, rng = self.w, self.w.rng
@@ -100,7 +100,7 @@ class Market:
         self.total["sozlesme"] += 1
         self.total["hacim_tl"] += c["hacim_tl"]
         self.total["tasarruf_tl"] += c["tasarruf_tl"]
-        self.w.log("pazaryeri", f"Kapasite sözleşmesi: {c['veren_ad']} → {c['isteyen_ad']} · {c['kaynak']} {q} {c['birim']}")
+        self.w.log("pazaryeri", f"Capacity contract: {c['veren_ad']} → {c['isteyen_ad']} · {c['kaynak']} {q} {c['birim']}")
         return c
 
     def detail(self):

@@ -1,4 +1,4 @@
-/* NEXUS OSB — kontrol odası arayüzü */
+/* NEXUS OSB — control room UI */
 :root {
   --bg: #060a13; --bg2: #0a101d; --panel: #0d1424; --panel2: #121b2f; --panel3: #17223a;
   --line: #1d2a44; --line2: #26375a; --text: #e8eef8; --muted: #8a9ab5; --dim: #5d6c88;
@@ -21,7 +21,7 @@ h1, h2, h3, h4 { font-family: var(--f-head); margin: 0; letter-spacing: -.01em; 
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-thumb { background: #1e2b46; border-radius: 10px; border: 2px solid var(--bg); }
 
-/* ---------- iskelet ---------- */
+/* ---------- layout ---------- */
 .app { display: grid; grid-template-columns: 236px 1fr; height: 100vh; }
 .side { background: linear-gradient(180deg, #0a1120, #070c17); border-right: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; }
 .brand { padding: 18px 18px 14px; display: flex; gap: 11px; align-items: center; border-bottom: 1px solid var(--line); }
@@ -61,7 +61,7 @@ h1, h2, h3, h4 { font-family: var(--f-head); margin: 0; letter-spacing: -.01em; 
 @keyframes glow { 50% { box-shadow: 0 0 18px -4px rgba(251,146,60,.6); } }
 .content { flex: 1; overflow: auto; padding: 18px 22px 40px; min-height: 0; }
 
-/* ---------- ızgara & kartlar ---------- */
+/* ---------- grid & cards ---------- */
 .grid { display: grid; gap: var(--gap); }
 .g2 { grid-template-columns: repeat(2, minmax(0,1fr)); } .g3 { grid-template-columns: repeat(3, minmax(0,1fr)); }
 .g4 { grid-template-columns: repeat(4, minmax(0,1fr)); } .g5 { grid-template-columns: repeat(5, minmax(0,1fr)); }
@@ -112,7 +112,7 @@ input.inp:focus, textarea.inp:focus, select.inp:focus { border-color: var(--acce
 .sev-kritik { background: rgba(248,113,113,.18); color: #fca5a5; } .sev-uyari { background: rgba(251,191,36,.16); color: #fcd34d; }
 .sev-bilgi { background: rgba(96,165,250,.16); color: #93c5fd; } .sev-firsat { background: rgba(192,132,252,.16); color: #d8b4fe; }
 
-/* ---------- tablolar ---------- */
+/* ---------- tables ---------- */
 .tbl-wrap { overflow: auto; border-radius: var(--r2); }
 table.tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
 .tbl th { text-align: left; color: var(--muted); font-weight: 500; font-size: 11.5px; text-transform: uppercase; letter-spacing: .06em; padding: 8px 10px; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--panel); cursor: default; white-space: nowrap; }
@@ -123,7 +123,7 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
 .mini-bar { height: 6px; border-radius: 6px; background: #1a2640; overflow: hidden; min-width: 60px; }
 .mini-bar i { display: block; height: 100%; border-radius: 6px; background: var(--accent); }
 
-/* ---------- listeler ---------- */
+/* ---------- lists ---------- */
 .list { display: flex; flex-direction: column; gap: 8px; }
 .item { background: var(--bg2); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
 .item.click { cursor: pointer; } .item.click:hover { border-color: var(--line2); background: #0d1528; }
@@ -141,7 +141,7 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
 .bars .b-track i { display: block; height: 100%; border-radius: 10px; transition: width .5s; }
 .bars .b-val { text-align: right; font-family: var(--f-mono); }
 
-/* ---------- harita ---------- */
+/* ---------- map ---------- */
 .map-wrap { position: relative; border-radius: var(--r); overflow: hidden; border: 1px solid var(--line); background: #070d18; }
 .map-wrap canvas { display: block; width: 100%; height: 100%; cursor: grab; }
 .map-wrap canvas:active { cursor: grabbing; }
@@ -157,7 +157,7 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
 .map-zoom { position: absolute; right: 12px; top: 12px; display: flex; flex-direction: column; gap: 4px; z-index: 2; }
 .map-zoom button { width: 30px; height: 30px; border-radius: 8px; border: 1px solid var(--line2); background: rgba(7,12,22,.85); cursor: pointer; font-weight: 700; }
 
-/* ---------- çekmece ---------- */
+/* ---------- drawer ---------- */
 .drawer-bg { position: fixed; inset: 0; background: rgba(2,5,10,.55); z-index: 40; opacity: 0; pointer-events: none; transition: .2s; }
 .drawer-bg.on { opacity: 1; pointer-events: auto; }
 .drawer { position: fixed; right: 0; top: 0; bottom: 0; width: min(560px, 100vw); background: #0a1120; border-left: 1px solid var(--line2); z-index: 41; transform: translateX(100%); transition: .25s ease; overflow-y: auto; padding: 20px; }
@@ -168,13 +168,13 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
 .kv-grid span { color: var(--muted); font-size: 11.5px; display: block; }
 .kv-grid b { font: 600 15px var(--f-mono); }
 
-/* ---------- bildirim ---------- */
+/* ---------- notifications ---------- */
 .toasts { position: fixed; right: 18px; bottom: 18px; display: flex; flex-direction: column; gap: 8px; z-index: 60; }
 .toast { background: #0d1628; border: 1px solid var(--line2); border-left: 3px solid var(--accent); border-radius: 10px; padding: 10px 14px; font-size: 13px; max-width: 360px; box-shadow: var(--shadow); animation: tin .25s ease; }
 .toast.kritik { border-left-color: var(--crit); } .toast.uyari { border-left-color: var(--warn); } .toast.ok { border-left-color: var(--ok); }
 @keyframes tin { from { transform: translateY(10px); opacity: 0; } }
 
-/* ---------- grafik ---------- */
+/* ---------- charts ---------- */
 .chart { position: relative; width: 100%; }
 .chart svg { display: block; width: 100%; overflow: visible; }
 .chart .ax { fill: var(--dim); font: 10.5px var(--f-mono); }
@@ -188,7 +188,7 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
 .ring .rv b { font: 700 34px var(--f-mono); display: block; line-height: 1; }
 .ring .rv span { color: var(--muted); font-size: 11.5px; }
 
-/* ---------- sohbet ---------- */
+/* ---------- chat ---------- */
 .chat { display: flex; flex-direction: column; height: calc(100vh - 170px); min-height: 480px; }
 .chat-log { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; padding: 4px 4px 12px; }
 .msg { max-width: 86%; padding: 11px 14px; border-radius: 14px; font-size: 13.5px; white-space: pre-wrap; }
@@ -204,7 +204,7 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
 .typing span:nth-child(2) { animation-delay: .15s; } .typing span:nth-child(3) { animation-delay: .3s; }
 @keyframes tp { 50% { opacity: .2; transform: translateY(-3px); } }
 
-/* ---------- akış şeması ---------- */
+/* ---------- flow diagram ---------- */
 .flow svg text { font: 12px var(--f-body); fill: #c8d3e6; }
 .flow .fl { fill: none; stroke-linecap: round; stroke-dasharray: 6 8; animation: dash 1.2s linear infinite; }
 @keyframes dash { to { stroke-dashoffset: -28; } }

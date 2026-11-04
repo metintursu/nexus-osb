@@ -1,4 +1,4 @@
-"""NEXUS OSB — Sanayi Bölgesi İşletim Sistemi · API + canlı yayın + arayüz sunucusu."""
+"""NEXUS OSB — Industrial Zone Operating System · API + live stream + UI server."""
 import asyncio
 import json
 from urllib.parse import unquote
@@ -19,14 +19,14 @@ from .sim import foresight
 
 STATIC = os.path.join(os.path.dirname(__file__), "static")
 SEED = int(os.getenv("NEXUS_SEED", "42"))
-PREWARM_MIN = int(os.getenv("NEXUS_PREWARM_MIN", str(1440 + 8 * 60)))   # 2. gün 08:00'den başla
+PREWARM_MIN = int(os.getenv("NEXUS_PREWARM_MIN", str(1440 + 8 * 60)))   # start on day 2 at 08:00
 BOLGE_PATH = os.path.join(store.DATA_DIR, "bolge.json")
 
 settings = realdata.load_settings()
 pricing = realdata.Pricing(settings)
 weather = realdata.Weather(settings)
 bridges = Bridges(settings)
-calib = settings.get("kalibrasyon", {})          # tesis adı -> analiz sonucu
+calib = settings.get("kalibrasyon", {})          # plant name -> analysis result
 
 
 def load_zone():
@@ -66,7 +66,7 @@ ingest_q: "queue.Queue" = queue.Queue()
 mqtt_info = {"aktif": False, "host": os.getenv("MQTT_HOST", ""), "mesaj": 0, "hata": None}
 
 
-# ---------------------------------------------------------------- MQTT köprüsü (isteğe bağlı)
+# ---------------------------------------------------------------- MQTT bridge (optional)
 def start_mqtt():
     host = mqtt_info["host"]
     if not host:
@@ -117,7 +117,7 @@ async def broadcast(msg):
         clients.discard(ws)
 
 
-# ---------------------------------------------------------------- simülasyon döngüsü
+# ---------------------------------------------------------------- simulation loop
 async def sim_loop():
     last_send, last, acc = 0.0, time.perf_counter(), 0.0
     while True:
@@ -146,7 +146,7 @@ async def sim_loop():
 
 
 async def real_loop():
-    """Gerçek veri: köprüler (birkaç saniyede bir), fiyat (15 dk), hava (30 dk)."""
+    """Real data: bridges (every few seconds), prices (15 min), weather (30 min)."""
     t_price = t_wx = 0.0
     while True:
         try:
@@ -175,7 +175,7 @@ async def lifespan(app):
     for _ in range(PREWARM_MIN):
         world.tick()
     store.enable(True)
-    world.log("sistem", f"NEXUS OSB başlatıldı · {world.name} · {len(world.factories)} tesis · ön ısıtma {time.time()-t0:.1f} sn")
+    world.log("sistem", f"NEXUS OSB started · {world.name} · {len(world.factories)} sites · warm-up {time.time()-t0:.1f} s")
     start_mqtt()
     task = asyncio.create_task(sim_loop())
     task2 = asyncio.create_task(real_loop())
@@ -185,7 +185,7 @@ async def lifespan(app):
     task2.cancel()
 
 
-app = FastAPI(title="NEXUS OSB — Sanayi Bölgesi İşletim Sistemi", version="2.1.0", lifespan=lifespan)
+app = FastAPI(title="NEXUS OSB — Industrial Zone Operating System", version="2.2.0", lifespan=lifespan)
 
 
 # ---------------------------------------------------------------- modeller
@@ -245,7 +245,7 @@ forecast_cache = {"dk": -10 ** 9, "veri": None, "calisiyor": False}
 verse_state = {"calisiyor": False, "sonuc": None}
 
 
-# ---------------------------------------------------------------- uçlar
+# ---------------------------------------------------------------- endpoints
 @app.get("/api/saglik")
 def health_check():
     return {"durum": "ok", "dk": world.minute, "gun": world.day, "saat": world.clock()}
@@ -281,7 +281,7 @@ def api_factories():
 def api_factory(fid: str):
     f = world.fmap.get(fid)
     if not f:
-        raise HTTPException(404, "Tesis bulunamadı")
+        raise HTTPException(404, "Site not found")
     d = f.detail(world)
     d["simbiyoz"] = [l for l in world.symbiosis.links if f.id in (l["ureten"], l["alan"])]
     d["firsatlar"] = [o for o in world.symbiosis.opps if f.id in (o["ureten"], o["alan"])][:6]
@@ -299,10 +299,10 @@ def api_energy_set(r: EnergySet):
     e = world.energy
     if r.mod in ("otomatik", "puant", "kapali"):
         e.mode = r.mod
-        world.log("enerji", f"Batarya modu: {r.mod}")
+        world.log("enerji", f"Battery mode: {dict(otomatik='auto', puant='peak only', kapali='off')[r.mod]}")
     if r.dr_aktif is not None:
         e.dr_enabled = r.dr_aktif
-        world.log("enerji", f"Talep tarafı katılım {'açık' if r.dr_aktif else 'kapalı'}")
+        world.log("enerji", f"Demand response {'on' if r.dr_aktif else 'off'}")
     if r.rezerv is not None:
         e.reserve = max(0.0, min(0.8, r.rezerv))
     return e.detail(world)
@@ -311,7 +311,7 @@ def api_energy_set(r: EnergySet):
 @app.post("/api/enerji/talep-kaydir")
 def api_dr():
     n = world.energy.demand_response(world, None, 60)
-    world.log("enerji", f"Operatör talep kaydırma çağrısı: {n} tesis 60 dk")
+    world.log("enerji", f"Operator load-shift call: {n} sites for 60 min")
     return {"tesis": n}
 
 
@@ -323,7 +323,7 @@ def api_logistics():
 @app.post("/api/lojistik/ayar")
 def api_logistics_set(r: LogSet):
     world.logistics.pool = r.havuz
-    world.log("lojistik", f"Ortak filo havuzu {'açıldı' if r.havuz else 'kapatıldı'}")
+    world.log("lojistik", f"Shared fleet pool {'opened' if r.havuz else 'closed'}")
     return world.logistics.live()
 
 
@@ -336,7 +336,7 @@ def api_symbiosis():
 def api_sym_approve(oid: str):
     l = world.symbiosis.approve(oid)
     if not l:
-        raise HTTPException(400, "Fırsat artık geçerli değil")
+        raise HTTPException(400, "The opportunity is no longer valid")
     world.symbiosis.compute_opps()
     return l
 
@@ -345,7 +345,7 @@ def api_sym_approve(oid: str):
 def api_sym_stop(lid: str):
     l = world.symbiosis.stop(lid)
     if not l:
-        raise HTTPException(404, "Bağlantı bulunamadı")
+        raise HTTPException(404, "Link not found")
     world.symbiosis.compute_opps()
     return l
 
@@ -364,7 +364,7 @@ def api_market():
 def api_market_match(r: MatchReq):
     c = world.market.match(r.teklif, r.talep)
     if not c:
-        raise HTTPException(400, "Eşleşme geçersiz")
+        raise HTTPException(400, "Invalid match")
     return c
 
 
@@ -376,7 +376,7 @@ def api_water():
 @app.post("/api/su/ayar")
 def api_water_set(r: WaterSet):
     world.water.reuse = max(0.0, min(0.45, r.geri))
-    world.log("su", f"Su geri kazanım oranı %{world.water.reuse*100:.0f}")
+    world.log("su", f"Water reuse rate {world.water.reuse*100:.0f}%")
     return world.water.live()
 
 
@@ -389,7 +389,7 @@ def api_incidents():
 def api_incident_action(iid: str, r: ActionReq):
     inc = world.incidents.action(iid, r.aksiyon)
     if not inc:
-        raise HTTPException(404, "Olay bulunamadı")
+        raise HTTPException(404, "Incident not found")
     return inc
 
 
@@ -403,13 +403,13 @@ def api_scenarios():
 def api_scenario_start(key: str):
     s = world.start_scenario(key)
     if not s:
-        raise HTTPException(404, "Senaryo yok")
+        raise HTTPException(404, "No such scenario")
     return s
 
 
 @app.post("/api/senaryolar/durdur")
 def api_scenario_stop():
-    world.stop_scenario("Operatör durdurdu")
+    world.stop_scenario("Stopped by operator")
     return {"ok": True}
 
 
@@ -430,10 +430,10 @@ def api_sim_set(r: Speed):
 
 @app.post("/api/veri/{fid}")
 def api_ingest(fid: str, data: dict):
-    """Gerçek tesisten veri: {"power_kw": 1250, "durum": "calisiyor", "uretim_dk": 12.5, "oee": 0.81, "gecerlilik_dk": 15}"""
+    """Data from a real plant: {"power_kw": 1250, "durum": "calisiyor", "uretim_dk": 12.5, "oee": 0.81, "gecerlilik_dk": 15}"""
     if not apply_ingest(fid, data):
-        raise HTTPException(404, "Tesis bulunamadı")
-    world.log("entegrasyon", f"Canlı veri alındı: {world.fmap[fid].ad}")
+        raise HTTPException(404, "Site not found")
+    world.log("entegrasyon", f"Live data received: {world.fmap[fid].ad}")
     return {"ok": True, "fabrika": fid, "gecerli_dk": data.get("gecerlilik_dk", 15)}
 
 
@@ -461,7 +461,7 @@ async def api_ai_status():
 async def api_ai_model(r: ModelReq):
     await ai.status()
     if not ai.set_model(r.model):
-        raise HTTPException(400, "Model bulunamadı")
+        raise HTTPException(400, "Model not found")
     return await ai.status()
 
 
@@ -470,7 +470,7 @@ async def api_ai_chat(r: ChatReq):
     return await ai.chat(world, r.mesaj, r.gecmis)
 
 
-# ---------------------------------------------------------------- v2: otopilot, ajanlar, ustalar, H2, öngörü
+# ---------------------------------------------------------------- v2: autopilot, agents, technicians, H2, foresight
 @app.get("/api/otopilot")
 def api_ap():
     return world.autopilot.detail()
@@ -493,7 +493,7 @@ def api_ap_rule(r: RuleReq):
 def api_ap_approve(oid: str):
     l = world.autopilot.approve_pending(oid)
     if not l:
-        raise HTTPException(400, "Bekleyen karar bulunamadı")
+        raise HTTPException(400, "No pending decision found")
     return l
 
 
@@ -505,7 +505,7 @@ def api_agents():
 @app.post("/api/muzakere/otonom")
 def api_agents_auto(r: Toggle):
     world.agents.otonom = r.aktif
-    world.log("muzakere", f"Ajan yetkisi: {'otonom' if r.aktif else 'öneri'}")
+    world.log("muzakere", f"Agent authority: {'autonomous' if r.aktif else 'advisory'}")
     return {"otonom": r.aktif}
 
 
@@ -513,7 +513,7 @@ def api_agents_auto(r: Toggle):
 def api_agents_approve(rid: str):
     l = world.agents.approve(rid)
     if not l:
-        raise HTTPException(400, "Onaylanacak anlaşma yok")
+        raise HTTPException(400, "No deal to approve")
     return l
 
 
@@ -530,7 +530,7 @@ def api_h2():
 @app.post("/api/hidrojen")
 def api_h2_set(r: Toggle):
     world.hydrogen.enabled = r.aktif
-    world.log("enerji", f"Hidrojen Vadisi {'devrede' if r.aktif else 'devre dışı'}")
+    world.log("enerji", f"Hydrogen Valley {'online' if r.aktif else 'offline'}")
     return world.hydrogen.detail()
 
 
@@ -567,22 +567,22 @@ def api_verse_info():
 @app.post("/api/evrenler")
 async def api_verse(r: VerseReq):
     if r.a not in foresight.POLICIES or r.b not in foresight.POLICIES:
-        raise HTTPException(400, "Politika yok")
+        raise HTTPException(400, "No such policy")
     if verse_state["calisiyor"]:
-        raise HTTPException(409, "Bir karşılaştırma zaten çalışıyor")
+        raise HTTPException(409, "A comparison is already running")
     verse_state["calisiyor"] = True
     try:
         A, B = foresight.clone(world), foresight.clone(world)
         res = await asyncio.to_thread(foresight.multiverse, A, B, r.a, r.b, max(0.5, min(7.0, r.gun)))
         res["baslangic"] = world.minute
         verse_state["sonuc"] = res
-        world.log("evren", f"Paralel evren: {res['a']['ad']} vs {res['b']['ad']} · {r.gun} gün")
+        world.log("evren", f"Parallel universes: {res['a']['ad']} vs {res['b']['ad']} · {r.gun} day(s)")
         return res
     finally:
         verse_state["calisiyor"] = False
 
 
-# ---------------------------------------------------------------- v2.1: gerçek veri, köprü, kalibrasyon, bölge tasarımı
+# ---------------------------------------------------------------- v2.1: real data, bridge, calibration, zone design
 class PriceSet(BaseModel):
     mod: str | None = None
     sabit_bilesen: float | None = None
@@ -625,7 +625,7 @@ async def api_price_set(r: PriceSet):
         await pricing.refresh()
     push_real()
     persist()
-    world.log("enerji", f"Elektrik fiyat kaynağı: {pricing.mode}")
+    world.log("enerji", f"Electricity price source: {dict(simule='simulated', epias='EPİAŞ live', dosya='file')[pricing.mode]}")
     return pricing.detail()
 
 
@@ -650,7 +650,7 @@ async def api_price_file(request: Request):
     pricing.mode = "dosya"
     push_real()
     persist()
-    world.log("enerji", f"PTF dosyası yüklendi: {name} · {len(days)} gün")
+    world.log("enerji", f"PTF file loaded: {name} · {len(days)} days")
     return pricing.detail()
 
 
@@ -673,16 +673,16 @@ async def api_wx_set(r: WxSet):
 
 @app.post("/api/sim/esitle")
 def api_sim_sync():
-    """Simülasyon saatini gerçek saate eşitler (ileriye doğru; gece yarısı geçilirse gün kapanışı yapılır)."""
+    """Syncs the simulation clock to real time (forward only; crossing midnight closes the day)."""
     real = realdata.now()
     target = real.hour * 60 + real.minute
     cur = world.minute % 1440
     if target < cur:
         world.minute = (world.minute // 1440 + 1) * 1440 - 1
-        world.tick()           # gün kapanışı
+        world.tick()           # day close
         cur = 0
     world.minute += target - cur
-    world.log("sistem", f"Simülasyon saati gerçek saate eşitlendi: {world.clock()}")
+    world.log("sistem", f"Simulation clock synced to real time: {world.clock()}")
     return {"saat": world.clock(), "gun": world.day}
 
 
@@ -696,18 +696,18 @@ async def api_bridge_probe(r: ProbeReq):
     try:
         return await Bridges.probe(r.url, r.basliklar)
     except Exception as e:  # noqa: BLE001
-        raise HTTPException(400, f"Adres okunamadı: {type(e).__name__}: {str(e)[:200]}")
+        raise HTTPException(400, f"Could not read the address: {type(e).__name__}: {str(e)[:200]}")
 
 
 @app.post("/api/kopru")
 def api_bridge_save(b: dict):
     if not b.get("url") or not b.get("fabrika"):
-        raise HTTPException(400, "URL ve hedef tesis gerekli")
+        raise HTTPException(400, "URL and target site are required")
     if b["fabrika"] not in world.fmap:
-        raise HTTPException(400, "Hedef tesis bulunamadı")
+        raise HTTPException(400, "Target site not found")
     out = bridges.upsert(b)
     persist()
-    world.log("entegrasyon", f"Köprü kaydedildi: {out.get('ad') or out['url']} → {world.fmap[out['fabrika']].ad}")
+    world.log("entegrasyon", f"Bridge saved: {out.get('ad') or out['url']} → {world.fmap[out['fabrika']].ad}")
     return out
 
 
@@ -721,14 +721,14 @@ def api_bridge_delete(bid: str):
 @app.get("/api/kalibrasyon/sablon")
 def api_calib_template():
     return Response(content="\ufeff" + tabular.template_csv(), media_type="text/csv; charset=utf-8",
-                    headers={"Content-Disposition": "attachment; filename=nexus-gecmis-veri-sablonu.csv"})
+                    headers={"Content-Disposition": "attachment; filename=nexus-history-template.csv"})
 
 
 @app.post("/api/kalibrasyon/{fid}")
 async def api_calib(fid: str, request: Request, uygula: bool = False):
     f = world.fmap.get(fid)
     if not f:
-        raise HTTPException(404, "Tesis bulunamadı")
+        raise HTTPException(404, "Site not found")
     name = unquote(request.headers.get("x-dosya-adi", "veri.csv"))
     try:
         rows = tabular.read(name, await request.body())
@@ -740,7 +740,7 @@ async def api_calib(fid: str, request: Request, uygula: bool = False):
         calibrate.apply(f, res)
         calib[f.ad] = res
         persist()
-        world.log("entegrasyon", f"Kalibrasyon uygulandı: {f.ad} ({res['mod']}, {res['satir']} satır)")
+        world.log("entegrasyon", f"Calibration applied: {f.ad} ({res['mod']}, {res['satir']} rows)")
     return res
 
 
@@ -748,7 +748,7 @@ async def api_calib(fid: str, request: Request, uygula: bool = False):
 def api_calib_reset(fid: str):
     f = world.fmap.get(fid)
     if not f:
-        raise HTTPException(404, "Tesis bulunamadı")
+        raise HTTPException(404, "Site not found")
     s = f.s
     f.rated_kw, f.rate_h = s["kw_kisi"] * f.calisan, s["uretim_kisi_saat"] * f.calisan
     f.gaz_k, f.su_k, f.profile, f.kalibre = s["gaz_kisi"], s["su_kisi"], None, None
@@ -772,8 +772,8 @@ async def _rebuild(cfg, save):
         nw = make_world(cfg)
     except Exception as e:  # noqa: BLE001
         from .sim import geo
-        geo.configure(world.cfg)    # harita ayarını mevcut bölgeye geri al
-        raise HTTPException(400, f"Bölge kurulamadı: {e}")
+        geo.configure(world.cfg)    # restore the map layout of the current zone
+        raise HTTPException(400, f"Could not build the zone: {e}")
     for _ in range(PREWARM_MIN):
         nw.tick()
     world = nw
@@ -785,7 +785,7 @@ async def _rebuild(cfg, save):
         os.remove(BOLGE_PATH)
     forecast_cache.update(dk=-10 ** 9, veri=None)
     verse_state["sonuc"] = None
-    world.log("sistem", f"Bölge yeniden kuruldu: {world.name} · {len(world.factories)} tesis")
+    world.log("sistem", f"Zone rebuilt: {world.name} · {len(world.factories)} sites")
     await broadcast(json.dumps({"tip": "yeniden"}))
     return {"ok": True, "ad": world.name, "tesis": len(world.factories)}
 
@@ -794,9 +794,9 @@ async def _rebuild(cfg, save):
 async def api_zone_set(cfg: dict):
     t = cfg.get("tesisler") or []
     if not t:
-        raise HTTPException(400, "En az bir tesis gerekli")
+        raise HTTPException(400, "At least one site is required")
     if len(t) > 200:
-        raise HTTPException(400, "En fazla 200 tesis")
+        raise HTTPException(400, "At most 200 sites")
     return await _rebuild(cfg, True)
 
 
@@ -819,7 +819,7 @@ async def ws_endpoint(ws: WebSocket):
         clients.discard(ws)
 
 
-# ---------------------------------------------------------------- arayüz
+# ---------------------------------------------------------------- UI
 app.mount("/static", StaticFiles(directory=STATIC), name="static")
 
 
@@ -831,5 +831,5 @@ def index():
 @app.exception_handler(404)
 async def nf(request, exc):
     if request.url.path.startswith("/api"):
-        return JSONResponse({"detail": getattr(exc, "detail", "Bulunamadı")}, status_code=404)
+        return JSONResponse({"detail": getattr(exc, "detail", "Not found")}, status_code=404)
     return FileResponse(os.path.join(STATIC, "index.html"))

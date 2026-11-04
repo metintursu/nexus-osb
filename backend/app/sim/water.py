@@ -1,6 +1,6 @@
-"""Merkezi atıksu arıtma tesisi ve geri kazanım."""
+"""Central wastewater treatment plant and water reuse."""
 
-LIMIT_KOI = 250.0   # deşarj sınırı mg/L (simüle)
+LIMIT_KOI = 250.0   # discharge limit mg/L (simulated)
 
 
 class Water:
@@ -39,13 +39,13 @@ class Water:
         if self.koi_out > LIMIT_KOI:
             self.over += 1
             if self.over == 10:
-                w.incidents.raise_once("atiksu", "su", "Arıtma çıkışında KOİ sınır aşımı", "uyari",
-                                       detay=f"Çıkış KOİ {self.koi_out:.0f} mg/L > {LIMIT_KOI:.0f} mg/L · yüklenme %{self.util*100:.0f}",
-                                       aksiyonlar=["Yüksek KOİ'li tesislerden (gıda, kimya, tekstil) dengeleme havuzuna yönlendir",
-                                                   "Havalandırma blowerlarını %100'e al", "Numune al ve laboratuvara gönder"])
+                w.incidents.raise_once("atiksu", "su", "COD limit exceeded at plant outlet", "uyari",
+                                       detay=f"Outlet COD {self.koi_out:.0f} mg/L > {LIMIT_KOI:.0f} mg/L · load {self.util*100:.0f}%",
+                                       aksiyonlar=["Divert high-COD sites (food, chemicals, textiles) to the equalisation basin",
+                                                   "Run aeration blowers at 100%", "Take a sample and send it to the lab"])
         else:
             if self.over >= 10 and self.koi_out < LIMIT_KOI * 0.9:
-                w.incidents.resolve_key("atiksu", "Çıkış değerleri sınır içine döndü")
+                w.incidents.resolve_key("atiksu", "Outlet values back within limits")
             if self.koi_out < LIMIT_KOI * 0.9:
                 self.over = 0
         if w.minute % 5 == 0:

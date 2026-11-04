@@ -1,4 +1,4 @@
-"""Tek bir fabrikanın dakikalık modeli: vardiya, yük, enerji, gaz, su, üretim, atık, karbon."""
+"""Minute-by-minute model of a single plant: shifts, load, power, gas, water, output, waste, carbon."""
 import math
 
 from .data import SECTORS, GAS_CO2, GAS_PRICE, WATER_PRICE
@@ -16,7 +16,7 @@ class Factory:
         self.id, self.ad, self.sektor, self.s = fid, ad, sektor, s
         self.parcel = parcel
         self.gaz_k, self.su_k = s["gaz_kisi"], s["su_kisi"]
-        self.profile = None          # gerçek veriden kalibre edilmiş 24 saatlik yük profili (0–1)
+        self.profile = None          # 24-hour load profile calibrated from real data (0–1)
         self.kalibre = None
         self.x, self.y, self.w, self.h = parcel["x"], parcel["y"], parcel["w"], parcel["h"]
         self.cx, self.cy = round(self.x + self.w / 2, 1), round(self.y + self.h / 2, 1)
@@ -30,7 +30,7 @@ class Factory:
         self.tm = None
         self.rng = rng
         self.phase = rng.uniform(0, 6.28)
-        self.fault = None            # (durum, bitis_dk, neden, olay_id)
+        self.fault = None            # (status, end_minute, reason, incident_id)
         self.status, self.reason = "bosta", ""
         self.load = 0.15
         self.power_kw = self.prod_min = self.gas_m3h = self.water_m3h = self.co2_kgh = 0.0
@@ -40,7 +40,7 @@ class Factory:
         self.waste_today = {w: 0.0 for w in s["atik"]}
         self.input_stock = {w: 0.0 for w in s["kabul"]}
         self.received_total = {w: 0.0 for w in s["kabul"]}
-        self.gen_kw = 0.0            # biyogaz tesisi üretimi
+        self.gen_kw = 0.0            # biogas plant output
         self.canli, self.canli_until, self.canli_data = False, 0, {}
         self.hist = []               # (dk, kW, oee)
 
@@ -64,17 +64,17 @@ class Factory:
         if m >= self.dr_until:
             self.dr = 0.0
 
-        # durum
+        # status
         if self.fault:
             self.status, self.reason = self.fault[0], self.fault[2]
         elif w.outage and not (s["kritik"] and w.energy.critical_ok):
-            self.status, self.reason = "durdu", "Şebeke kesintisi — yük atıldı"
+            self.status, self.reason = "durdu", "Grid outage — load shed"
         elif self.in_shift(h):
             self.status, self.reason = "calisiyor", ""
         else:
-            self.status, self.reason = "bosta", "Vardiya dışı"
+            self.status, self.reason = "bosta", "Off shift"
 
-        # hedef yük
+        # target load
         if self.status == "calisiyor" and self.profile:
             tgt = self.profile[int(h) % 24] * (1 + 0.04 * math.sin(m / 37 + self.phase)) + rng.gauss(0, 0.015)
             tgt *= w.mods["talep"].get(self.sektor, 1.0)
@@ -98,15 +98,15 @@ class Factory:
         self.oee = max(0.3, min(0.95, self.oee))
 
         self.power_kw = self.rated_kw * eff * w.mods["sogutma"] * w.wx["sogutma"]
-        # talep kaydırma çoğunlukla yardımcı/ertelenebilir yükleri (kompresör, ön ısıtma, pompa) keser;
-        # üretime etkisi kesilen gücün ~%25'i kadardır
+        # demand response mostly sheds auxiliary/deferrable loads (compressors, pre-heating, pumps);
+        # its effect on output is ~25% of the curtailed power
         self.prod_min = self.rate_h / 60 * self.load * (1 - self.dr * 0.25) * self.oee if producing else 0.0
         self.gas_m3h = self.gaz_k * self.calisan * eff * w.mods["gaz"] * w.wx["isitma"]
         if self.sektor in ("dokum", "metal") and w.hydrogen.frac > 0:
             self.gas_m3h *= 1 - w.hydrogen.frac
         self.water_m3h = self.su_k * self.calisan * (0.3 + 0.7 * eff) * w.mods["su"] * w.wx["su"]
 
-        # canlı veri (REST/MQTT) modeli ezer
+        # live data (REST/MQTT) overrides the model
         if self.canli and m < self.canli_until:
             d = self.canli_data
             if "power_kw" in d:
@@ -120,7 +120,7 @@ class Factory:
         elif self.canli and m >= self.canli_until:
             self.canli = False
 
-        # biyogaz tesisi: organik atığı elektriğe çevirir
+        # biogas plant: turns organic waste into electricity
         if self.sektor == "biyogaz":
             org = self.input_stock.get("organik", 0.0)
             used = min(org, 0.04)
@@ -128,7 +128,7 @@ class Factory:
             self.gen_kw = used * 220 * 60       # 220 kWh/t
             self.prod_min = used * 220
 
-        # atık üretimi
+        # waste generation
         if producing or eff > 0.2:
             k = self.calisan / 100 / 1440 * (eff / 0.9)
             for wt, amt in s["atik"].items():
@@ -136,7 +136,7 @@ class Factory:
                 self.waste_stock[wt] += g
                 self.waste_today[wt] += g
 
-        # muhasebe (dakika)
+        # accounting (per minute)
         kwh = self.power_kw / 60
         gaz = self.gas_m3h / 60
         su = self.water_m3h / 60
