@@ -1,4 +1,5 @@
 """Zone power grid: solar farm, battery (BESS), biogas, substations, contracted capacity, demand response."""
+from ..i18n import L, LANG, TN
 import math
 
 from . import geo
@@ -100,17 +101,17 @@ class Energy:
             if tm["oran"] > 1.0:
                 tm["asim"] += 1
                 if tm["asim"] == 3:
-                    w.incidents.raise_once(key, "trafo", f"{tm['id']} substation overloaded",
+                    w.incidents.raise_once(key, "trafo", L(f"{tm['id']} substation overloaded", f"{tm['id']} trafo merkezi aşırı yükte"),
                                            "kritik" if tm["oran"] > 1.08 else "uyari",
-                                           detay=f"Load {tm['oran']*100:.0f}% — {tm['yuk_kw']/1000:.1f} MW / {tm['kapasite_kw']/1000:.1f} MW",
-                                           aksiyonlar=["Shift flexible loads (foundry, metal, plastics, building) by 60 min",
-                                                       "Increase battery discharge", "Send the maintenance crew to the substation"])
+                                           detay=L(f"Load {tm['oran']*100:.0f}% — {tm['yuk_kw']/1000:.1f} MW / {tm['kapasite_kw']/1000:.1f} MW", f"Yüklenme %{TN(tm['oran']*100, 0)} — {TN(tm['yuk_kw']/1000, 1)} MW / {TN(tm['kapasite_kw']/1000, 1)} MW"),
+                                           aksiyonlar=[L("Shift flexible loads (foundry, metal, plastics, building) by 60 min", "Esnek yükleri (döküm, metal, plastik, yapı) 60 dk kaydır"),
+                                                       L("Increase battery discharge", "Batarya deşarjını artır"), L("Send the maintenance crew to the substation", "Bakım ekibini trafo sahasına yönlendir")])
                     if self.dr_enabled:
                         n = self.demand_response(w, tm["fabrikalar"], 60)
-                        w.incidents.note(key, f"Automatic demand response: load shifted at {n} sites")
+                        w.incidents.note(key, L(f"Automatic demand response: load shifted at {n} sites", f"Otomatik talep tarafı katılım: {n} tesiste yük kaydırıldı"))
             else:
                 if tm["asim"] and tm["oran"] < 0.96:
-                    w.incidents.resolve_key(key, "Load back to normal")
+                    w.incidents.resolve_key(key, L("Load back to normal", "Yüklenme normale döndü"))
                 if tm["oran"] < 0.99:
                     tm["asim"] = 0
 
@@ -120,23 +121,23 @@ class Energy:
             self.today["asim_kwh"] += (grid - self.contract_kw) / 60
             self.total["asim_kwh"] += (grid - self.contract_kw) / 60
             if self.over_contract_ticks == 5:
-                w.incidents.raise_once("sozlesme", "enerji", "Contracted capacity exceeded", "uyari",
-                                       detay=f"Grid draw {grid/1000:.1f} MW > contract {self.contract_kw/1000:.1f} MW",
-                                       aksiyonlar=["Send a demand-response call", "Set battery mode to 'auto'",
-                                                   "Stagger shift starts by 15 min"])
+                w.incidents.raise_once("sozlesme", "enerji", L("Contracted capacity exceeded", "Sözleşme gücü aşılıyor"), "uyari",
+                                       detay=L(f"Grid draw {grid/1000:.1f} MW > contract {self.contract_kw/1000:.1f} MW", f"Şebekeden çekiş {TN(grid/1000, 1)} MW > sözleşme {TN(self.contract_kw/1000, 1)} MW"),
+                                       aksiyonlar=[L("Send a demand-response call", "Talep tarafı katılım çağrısı gönder"), L("Set battery mode to 'auto'", "Batarya modunu 'otomatik' yap"),
+                                                   L("Stagger shift starts by 15 min", "Vardiya başlangıçlarını 15 dk kaydır")])
                 if self.dr_enabled:
                     n = self.demand_response(w, None, 45)
-                    w.incidents.note("sozlesme", f"Zone-wide demand response: {n} sites")
+                    w.incidents.note("sozlesme", L(f"Zone-wide demand response: {n} sites", f"Bölge geneli talep tarafı katılım: {n} tesis"))
         else:
             if self.over_contract_ticks >= 5 and grid < self.contract_kw * 0.95:
-                w.incidents.resolve_key("sozlesme", "Grid draw back below contract limit")
+                w.incidents.resolve_key("sozlesme", L("Grid draw back below contract limit", "Çekiş sözleşme sınırının altına indi"))
             if grid < self.contract_kw * 0.95:
                 self.over_contract_ticks = 0
 
         if self.unserved_kw > 1 and w.outage:
-            w.incidents.raise_once("karsilanamayan", "enerji", "Critical loads cannot be fully supplied", "kritik",
-                                   detay="During the outage, battery + solar cannot cover the critical load",
-                                   aksiyonlar=["Switch off non-critical auxiliary loads", "Start the generators"])
+            w.incidents.raise_once("karsilanamayan", "enerji", L("Critical loads cannot be fully supplied", "Kritik yükler tam beslenemiyor"), "kritik",
+                                   detay=L("During the outage, battery + solar cannot cover the critical load", "Kesinti sırasında batarya + GES kritik yükü karşılamıyor"),
+                                   aksiyonlar=[L("Switch off non-critical auxiliary loads", "Kritik olmayan yardımcı yükleri kapat"), L("Start the generators", "Jeneratörleri devreye al")])
 
         # muhasebe
         tariff = w.tariff

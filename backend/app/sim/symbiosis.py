@@ -3,6 +3,7 @@
 Continuously scans for opportunities, runs approved links by truck (or pipeline for heat),
 and tracks money earned, CO2 avoided and tonnes diverted from landfill.
 """
+from ..i18n import L, LANG
 from . import geo
 from .data import WASTE, BERTARAF_TL_T, TRUCK_LOAD_T, HEAT_PIPE_MAX_UNITS, DIESEL_TL_KM
 
@@ -59,7 +60,7 @@ class Symbiosis:
                                   "atik": wt, "atik_ad": info["ad"], "birim": info["birim"], "mesafe_km": round(km, 2),
                                   "aylik_miktar": round(monthly, 1), "aylik_kazanc_tl": round(save),
                                   "aylik_co2_t": round(monthly * info["co2"], 1), "yatirim_tl": round(capex),
-                                  "geri_odeme_ay": payback, "tasima": "pipeline" if info["boru"] else "truck"})
+                                  "geri_odeme_ay": payback, "tasima": L("pipeline", "boru hattı") if info["boru"] else L("truck", "kamyon")})
                 cands.sort(key=lambda c: -c["aylik_kazanc_tl"])
                 out.extend(cands[:2])
         out.sort(key=lambda c: -c["aylik_kazanc_tl"])
@@ -82,14 +83,14 @@ class Symbiosis:
                 "kazanc_tl": 0.0, "co2_t": 0.0, "sefer": 0, "bekleyen": False}
         self.links.append(link)
         self.opps = [x for x in self.opps if not (x["ureten"] == o["ureten"] and x["atik"] == o["atik"])]
-        self.w.log("simbiyoz", f"Symbiosis link created: {o['ureten_ad']} → {o['alan_ad']} ({o['atik_ad']})")
+        self.w.log("simbiyoz", L(f"Symbiosis link created: {o['ureten_ad']} → {o['alan_ad']} ({o['atik_ad']})", f"Simbiyoz bağlantısı kuruldu: {o['ureten_ad']} → {o['alan_ad']} ({o['atik_ad']})"))
         return link
 
     def stop(self, lid):
         for l in self.links:
             if l["lid"] == lid and l["aktif"]:
                 l["aktif"] = False
-                self.w.log("simbiyoz", f"Symbiosis link stopped: {l['lid']}")
+                self.w.log("simbiyoz", L(f"Symbiosis link stopped: {l['lid']}", f"Simbiyoz bağlantısı durduruldu: {l['lid']}"))
                 return l
         return None
 

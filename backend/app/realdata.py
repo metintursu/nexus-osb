@@ -10,6 +10,7 @@ Unit price paid by the consumer = PTF/1000 + a fixed component for network fees,
 
 Weather: Open-Meteo (free, no API key) hourly cloud cover, temperature, wind speed and direction,
 mapped onto the simulation clock by hour of day."""
+from .i18n import L, LANG
 import json
 import os
 import time
@@ -86,11 +87,11 @@ class Pricing:
         if self.tgt and time.time() - self.tgt_t < 100 * 60:
             return self.tgt
         if not (self.user and self.pw):
-            raise RuntimeError("EPİAŞ username/password not set")
+            raise RuntimeError(L("EPİAŞ username/password not set", "EPİAŞ kullanıcı adı/şifre tanımlı değil"))
         r = await client.post(EPIAS_LOGIN, data={"username": self.user, "password": self.pw},
                               headers={"Accept": "text/plain"})
         if r.status_code not in (200, 201) or not r.text.startswith("TGT-"):
-            raise RuntimeError(f"EPİAŞ login failed (HTTP {r.status_code})")
+            raise RuntimeError(L(f"EPİAŞ login failed (HTTP {r.status_code})", f"EPİAŞ girişi başarısız (HTTP {r.status_code})"))
         self.tgt, self.tgt_t = r.text.strip(), time.time()
         return self.tgt
 
@@ -106,11 +107,11 @@ class Pricing:
                     r = await c.post(EPIAS_MCP, json={"startDate": stamp, "endDate": stamp}, headers={"TGT": tgt})
                     if r.status_code == 401:
                         self.tgt = None
-                        raise RuntimeError("EPİAŞ ticket rejected (401)")
+                        raise RuntimeError(L("EPİAŞ ticket rejected (401)", "EPİAŞ bileti reddedildi (401)"))
                     if r.status_code != 200:
                         if d != d0:
                             break           # tomorrow's PTF is not published before ~14:00
-                        raise RuntimeError(f"Could not fetch PTF (HTTP {r.status_code})")
+                        raise RuntimeError(L(f"Could not fetch PTF (HTTP {r.status_code})", f"PTF alınamadı (HTTP {r.status_code})"))
                     items = r.json().get("items") or []
                     arr = [None] * 24
                     for it in items:
@@ -128,7 +129,7 @@ class Pricing:
         rows = tabular.read(name, raw)
         days = tabular.price_days(rows)
         if not days:
-            raise ValueError("No date/hour and PTF (TRY/MWh) columns found in the file")
+            raise ValueError(L("No date/hour and PTF (TRY/MWh) columns found in the file", "Dosyada tarih/saat ve PTF (TL/MWh) sütunları bulunamadı"))
         self.days, self.dosya_ad = days, name
         return days
 
@@ -153,7 +154,7 @@ class Pricing:
 
     def detail(self):
         day, ptf = self.today_ptf()
-        return {"mod": self.mode, "sabit_bilesen": self.fee, "durum": self.status if self.mode == "epias" else ("ok" if ptf else "no data"),
+        return {"mod": self.mode, "sabit_bilesen": self.fee, "durum": self.status if self.mode == "epias" else ("ok" if ptf else L("no data", "veri yok")),
                 "hata": self.error if self.mode == "epias" else None, "son": self.last, "gun": day, "ptf": ptf,
                 "birim_fiyat": self.prices_kwh(), "kimlik": bool(self.user and self.pw), "oturum_kimlik": self.session_cred,
                 "dosya_ad": self.dosya_ad, "dosya_gun_sayisi": len(self.days), "epias_gun_sayisi": len(self.live)}
@@ -209,13 +210,13 @@ class Weather:
                     arr[h] = {"bulut": hr["cloud_cover"][i], "sicaklik": hr["temperature_2m"][i], "ruzgar": hr["wind_speed_10m"][i],
                               "ruzgar_yon": hr["wind_direction_10m"][i], "isinim": hr["shortwave_radiation"][i]}
             if any(a is None for a in arr):
-                raise RuntimeError("Hourly data came back incomplete")
+                raise RuntimeError(L("Hourly data came back incomplete", "Saatlik veri eksik geldi"))
             self.hours = arr
             self.now_vals = d.get("current")
             self.status, self.error, self.last = "ok", None, now().isoformat(timespec="minutes")
         except Exception as e:  # noqa: BLE001
-            self.status, self.error = "hata", f"Could not reach Open-Meteo: {type(e).__name__}"
+            self.status, self.error = "hata", L(f"Could not reach Open-Meteo: {type(e).__name__}", f"Open-Meteo'ya ulaşılamadı: {type(e).__name__}")
 
     def detail(self):
-        return {**self.settings(), "durum": self.status if self.enabled else "off", "hata": self.error, "son": self.last,
+        return {**self.settings(), "durum": self.status if self.enabled else L("off", "kapalı"), "hata": self.error, "son": self.last,
                 "saatler": self.hours, "simdi": self.now_vals, "sehirler": {k: list(v) for k, v in CITIES.items()}}

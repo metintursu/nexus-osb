@@ -1,4 +1,7 @@
 """NEXUS OSB — Industrial Zone Operating System · API + live stream + UI server."""
+from .i18n import L, LANG, TN
+from . import i18n
+import sys
 import asyncio
 import json
 from urllib.parse import unquote
@@ -175,7 +178,7 @@ async def lifespan(app):
     for _ in range(PREWARM_MIN):
         world.tick()
     store.enable(True)
-    world.log("sistem", f"NEXUS OSB started · {world.name} · {len(world.factories)} sites · warm-up {time.time()-t0:.1f} s")
+    world.log("sistem", L(f"NEXUS OSB started · {world.name} · {len(world.factories)} sites · warm-up {time.time()-t0:.1f} s", f"NEXUS OSB başlatıldı · {world.name} · {len(world.factories)} tesis · ön ısıtma {TN(time.time()-t0, 1)} sn"))
     start_mqtt()
     task = asyncio.create_task(sim_loop())
     task2 = asyncio.create_task(real_loop())
@@ -185,7 +188,7 @@ async def lifespan(app):
     task2.cancel()
 
 
-app = FastAPI(title="NEXUS OSB — Industrial Zone Operating System", version="2.2.0", lifespan=lifespan)
+app = FastAPI(title=L("NEXUS OSB — Industrial Zone Operating System", "NEXUS OSB — Sanayi Bölgesi İşletim Sistemi"), version="2.3.0", lifespan=lifespan)
 
 
 # ---------------------------------------------------------------- modeller
@@ -246,6 +249,36 @@ verse_state = {"calisiyor": False, "sonuc": None}
 
 
 # ---------------------------------------------------------------- endpoints
+@app.get("/api/dil")
+def get_language():
+    return {"dil": LANG, "diller": ["en", "tr"]}
+
+
+class LangReq(BaseModel):
+    dil: str
+
+
+@app.post("/api/dil")
+async def set_language(r: LangReq):
+    """Switch language: saved to DATA_DIR/dil.txt, then the server restarts itself so the whole
+    simulation (names, agents, logs) is rebuilt in the new language. Takes a few seconds."""
+    lang = r.dil.strip().lower()
+    if lang not in i18n.SUPPORTED:
+        raise HTTPException(400, "en | tr")
+    if lang == LANG:
+        return {"dil": LANG, "yeniden_baslat": False}
+    i18n.save(lang)
+
+    def restart():
+        time.sleep(0.6)
+        args = ([sys.executable, "-m", "uvicorn"] + sys.argv[1:]) if "uvicorn" in os.path.basename(os.path.dirname(sys.argv[0])) + os.path.basename(sys.argv[0]) else [sys.executable] + sys.argv
+        os.execv(sys.executable, args)
+
+    import threading
+    threading.Thread(target=restart, daemon=True).start()
+    return {"dil": lang, "yeniden_baslat": True}
+
+
 @app.get("/api/saglik")
 def health_check():
     return {"durum": "ok", "dk": world.minute, "gun": world.day, "saat": world.clock()}
@@ -281,7 +314,7 @@ def api_factories():
 def api_factory(fid: str):
     f = world.fmap.get(fid)
     if not f:
-        raise HTTPException(404, "Site not found")
+        raise HTTPException(404, L("Site not found", "Tesis bulunamadı"))
     d = f.detail(world)
     d["simbiyoz"] = [l for l in world.symbiosis.links if f.id in (l["ureten"], l["alan"])]
     d["firsatlar"] = [o for o in world.symbiosis.opps if f.id in (o["ureten"], o["alan"])][:6]
@@ -299,10 +332,10 @@ def api_energy_set(r: EnergySet):
     e = world.energy
     if r.mod in ("otomatik", "puant", "kapali"):
         e.mode = r.mod
-        world.log("enerji", f"Battery mode: {dict(otomatik='auto', puant='peak only', kapali='off')[r.mod]}")
+        world.log("enerji", L(f"Battery mode: {dict(otomatik='auto', puant='peak only', kapali='off')[r.mod]}", f"Batarya modu: {r.mod}"))
     if r.dr_aktif is not None:
         e.dr_enabled = r.dr_aktif
-        world.log("enerji", f"Demand response {'on' if r.dr_aktif else 'off'}")
+        world.log("enerji", L(f"Demand response {'on' if r.dr_aktif else 'off'}", f"Talep tarafı katılım {'açık' if r.dr_aktif else 'kapalı'}"))
     if r.rezerv is not None:
         e.reserve = max(0.0, min(0.8, r.rezerv))
     return e.detail(world)
@@ -311,7 +344,7 @@ def api_energy_set(r: EnergySet):
 @app.post("/api/enerji/talep-kaydir")
 def api_dr():
     n = world.energy.demand_response(world, None, 60)
-    world.log("enerji", f"Operator load-shift call: {n} sites for 60 min")
+    world.log("enerji", L(f"Operator load-shift call: {n} sites for 60 min", f"Operatör talep kaydırma çağrısı: {n} tesis 60 dk"))
     return {"tesis": n}
 
 
@@ -323,7 +356,7 @@ def api_logistics():
 @app.post("/api/lojistik/ayar")
 def api_logistics_set(r: LogSet):
     world.logistics.pool = r.havuz
-    world.log("lojistik", f"Shared fleet pool {'opened' if r.havuz else 'closed'}")
+    world.log("lojistik", L(f"Shared fleet pool {'opened' if r.havuz else 'closed'}", f"Ortak filo havuzu {'açıldı' if r.havuz else 'kapatıldı'}"))
     return world.logistics.live()
 
 
@@ -336,7 +369,7 @@ def api_symbiosis():
 def api_sym_approve(oid: str):
     l = world.symbiosis.approve(oid)
     if not l:
-        raise HTTPException(400, "The opportunity is no longer valid")
+        raise HTTPException(400, L("The opportunity is no longer valid", "Fırsat artık geçerli değil"))
     world.symbiosis.compute_opps()
     return l
 
@@ -345,7 +378,7 @@ def api_sym_approve(oid: str):
 def api_sym_stop(lid: str):
     l = world.symbiosis.stop(lid)
     if not l:
-        raise HTTPException(404, "Link not found")
+        raise HTTPException(404, L("Link not found", "Bağlantı bulunamadı"))
     world.symbiosis.compute_opps()
     return l
 
@@ -364,7 +397,7 @@ def api_market():
 def api_market_match(r: MatchReq):
     c = world.market.match(r.teklif, r.talep)
     if not c:
-        raise HTTPException(400, "Invalid match")
+        raise HTTPException(400, L("Invalid match", "Eşleşme geçersiz"))
     return c
 
 
@@ -376,7 +409,7 @@ def api_water():
 @app.post("/api/su/ayar")
 def api_water_set(r: WaterSet):
     world.water.reuse = max(0.0, min(0.45, r.geri))
-    world.log("su", f"Water reuse rate {world.water.reuse*100:.0f}%")
+    world.log("su", L(f"Water reuse rate {world.water.reuse*100:.0f}%", f"Su geri kazanım oranı %{TN(world.water.reuse*100, 0)}"))
     return world.water.live()
 
 
@@ -389,7 +422,7 @@ def api_incidents():
 def api_incident_action(iid: str, r: ActionReq):
     inc = world.incidents.action(iid, r.aksiyon)
     if not inc:
-        raise HTTPException(404, "Incident not found")
+        raise HTTPException(404, L("Incident not found", "Olay bulunamadı"))
     return inc
 
 
@@ -403,13 +436,13 @@ def api_scenarios():
 def api_scenario_start(key: str):
     s = world.start_scenario(key)
     if not s:
-        raise HTTPException(404, "No such scenario")
+        raise HTTPException(404, L("No such scenario", "Senaryo yok"))
     return s
 
 
 @app.post("/api/senaryolar/durdur")
 def api_scenario_stop():
-    world.stop_scenario("Stopped by operator")
+    world.stop_scenario(L("Stopped by operator", "Operatör durdurdu"))
     return {"ok": True}
 
 
@@ -432,8 +465,8 @@ def api_sim_set(r: Speed):
 def api_ingest(fid: str, data: dict):
     """Data from a real plant: {"power_kw": 1250, "durum": "calisiyor", "uretim_dk": 12.5, "oee": 0.81, "gecerlilik_dk": 15}"""
     if not apply_ingest(fid, data):
-        raise HTTPException(404, "Site not found")
-    world.log("entegrasyon", f"Live data received: {world.fmap[fid].ad}")
+        raise HTTPException(404, L("Site not found", "Tesis bulunamadı"))
+    world.log("entegrasyon", L(f"Live data received: {world.fmap[fid].ad}", f"Canlı veri alındı: {world.fmap[fid].ad}"))
     return {"ok": True, "fabrika": fid, "gecerli_dk": data.get("gecerlilik_dk", 15)}
 
 
@@ -461,7 +494,7 @@ async def api_ai_status():
 async def api_ai_model(r: ModelReq):
     await ai.status()
     if not ai.set_model(r.model):
-        raise HTTPException(400, "Model not found")
+        raise HTTPException(400, L("Model not found", "Model bulunamadı"))
     return await ai.status()
 
 
@@ -493,7 +526,7 @@ def api_ap_rule(r: RuleReq):
 def api_ap_approve(oid: str):
     l = world.autopilot.approve_pending(oid)
     if not l:
-        raise HTTPException(400, "No pending decision found")
+        raise HTTPException(400, L("No pending decision found", "Bekleyen karar bulunamadı"))
     return l
 
 
@@ -505,7 +538,7 @@ def api_agents():
 @app.post("/api/muzakere/otonom")
 def api_agents_auto(r: Toggle):
     world.agents.otonom = r.aktif
-    world.log("muzakere", f"Agent authority: {'autonomous' if r.aktif else 'advisory'}")
+    world.log("muzakere", L(f"Agent authority: {'autonomous' if r.aktif else 'advisory'}", f"Ajan yetkisi: {'otonom' if r.aktif else 'öneri'}"))
     return {"otonom": r.aktif}
 
 
@@ -513,7 +546,7 @@ def api_agents_auto(r: Toggle):
 def api_agents_approve(rid: str):
     l = world.agents.approve(rid)
     if not l:
-        raise HTTPException(400, "No deal to approve")
+        raise HTTPException(400, L("No deal to approve", "Onaylanacak anlaşma yok"))
     return l
 
 
@@ -530,7 +563,7 @@ def api_h2():
 @app.post("/api/hidrojen")
 def api_h2_set(r: Toggle):
     world.hydrogen.enabled = r.aktif
-    world.log("enerji", f"Hydrogen Valley {'online' if r.aktif else 'offline'}")
+    world.log("enerji", L(f"Hydrogen Valley {'online' if r.aktif else 'offline'}", f"Hidrojen Vadisi {'devrede' if r.aktif else 'devre dışı'}"))
     return world.hydrogen.detail()
 
 
@@ -567,16 +600,16 @@ def api_verse_info():
 @app.post("/api/evrenler")
 async def api_verse(r: VerseReq):
     if r.a not in foresight.POLICIES or r.b not in foresight.POLICIES:
-        raise HTTPException(400, "No such policy")
+        raise HTTPException(400, L("No such policy", "Politika yok"))
     if verse_state["calisiyor"]:
-        raise HTTPException(409, "A comparison is already running")
+        raise HTTPException(409, L("A comparison is already running", "Bir karşılaştırma zaten çalışıyor"))
     verse_state["calisiyor"] = True
     try:
         A, B = foresight.clone(world), foresight.clone(world)
         res = await asyncio.to_thread(foresight.multiverse, A, B, r.a, r.b, max(0.5, min(7.0, r.gun)))
         res["baslangic"] = world.minute
         verse_state["sonuc"] = res
-        world.log("evren", f"Parallel universes: {res['a']['ad']} vs {res['b']['ad']} · {r.gun} day(s)")
+        world.log("evren", L(f"Parallel universes: {res['a']['ad']} vs {res['b']['ad']} · {r.gun} day(s)", f"Paralel evren: {res['a']['ad']} vs {res['b']['ad']} · {r.gun} gün"))
         return res
     finally:
         verse_state["calisiyor"] = False
@@ -625,7 +658,7 @@ async def api_price_set(r: PriceSet):
         await pricing.refresh()
     push_real()
     persist()
-    world.log("enerji", f"Electricity price source: {dict(simule='simulated', epias='EPİAŞ live', dosya='file')[pricing.mode]}")
+    world.log("enerji", L(f"Electricity price source: {dict(simule='simulated', epias='EPİAŞ live', dosya='file')[pricing.mode]}", f"Elektrik fiyat kaynağı: {pricing.mode}"))
     return pricing.detail()
 
 
@@ -650,7 +683,7 @@ async def api_price_file(request: Request):
     pricing.mode = "dosya"
     push_real()
     persist()
-    world.log("enerji", f"PTF file loaded: {name} · {len(days)} days")
+    world.log("enerji", L(f"PTF file loaded: {name} · {len(days)} days", f"PTF dosyası yüklendi: {name} · {len(days)} gün"))
     return pricing.detail()
 
 
@@ -682,7 +715,7 @@ def api_sim_sync():
         world.tick()           # day close
         cur = 0
     world.minute += target - cur
-    world.log("sistem", f"Simulation clock synced to real time: {world.clock()}")
+    world.log("sistem", L(f"Simulation clock synced to real time: {world.clock()}", f"Simülasyon saati gerçek saate eşitlendi: {world.clock()}"))
     return {"saat": world.clock(), "gun": world.day}
 
 
@@ -696,18 +729,18 @@ async def api_bridge_probe(r: ProbeReq):
     try:
         return await Bridges.probe(r.url, r.basliklar)
     except Exception as e:  # noqa: BLE001
-        raise HTTPException(400, f"Could not read the address: {type(e).__name__}: {str(e)[:200]}")
+        raise HTTPException(400, L(f"Could not read the address: {type(e).__name__}: {str(e)[:200]}", f"Adres okunamadı: {type(e).__name__}: {str(e)[:200]}"))
 
 
 @app.post("/api/kopru")
 def api_bridge_save(b: dict):
     if not b.get("url") or not b.get("fabrika"):
-        raise HTTPException(400, "URL and target site are required")
+        raise HTTPException(400, L("URL and target site are required", "URL ve hedef tesis gerekli"))
     if b["fabrika"] not in world.fmap:
-        raise HTTPException(400, "Target site not found")
+        raise HTTPException(400, L("Target site not found", "Hedef tesis bulunamadı"))
     out = bridges.upsert(b)
     persist()
-    world.log("entegrasyon", f"Bridge saved: {out.get('ad') or out['url']} → {world.fmap[out['fabrika']].ad}")
+    world.log("entegrasyon", L(f"Bridge saved: {out.get('ad') or out['url']} → {world.fmap[out['fabrika']].ad}", f"Köprü kaydedildi: {out.get('ad') or out['url']} → {world.fmap[out['fabrika']].ad}"))
     return out
 
 
@@ -721,14 +754,14 @@ def api_bridge_delete(bid: str):
 @app.get("/api/kalibrasyon/sablon")
 def api_calib_template():
     return Response(content="\ufeff" + tabular.template_csv(), media_type="text/csv; charset=utf-8",
-                    headers={"Content-Disposition": "attachment; filename=nexus-history-template.csv"})
+                    headers={"Content-Disposition": L("attachment; filename=nexus-history-template.csv", "attachment; filename=nexus-gecmis-veri-sablonu.csv")})
 
 
 @app.post("/api/kalibrasyon/{fid}")
 async def api_calib(fid: str, request: Request, uygula: bool = False):
     f = world.fmap.get(fid)
     if not f:
-        raise HTTPException(404, "Site not found")
+        raise HTTPException(404, L("Site not found", "Tesis bulunamadı"))
     name = unquote(request.headers.get("x-dosya-adi", "veri.csv"))
     try:
         rows = tabular.read(name, await request.body())
@@ -740,7 +773,7 @@ async def api_calib(fid: str, request: Request, uygula: bool = False):
         calibrate.apply(f, res)
         calib[f.ad] = res
         persist()
-        world.log("entegrasyon", f"Calibration applied: {f.ad} ({res['mod']}, {res['satir']} rows)")
+        world.log("entegrasyon", L(f"Calibration applied: {f.ad} ({res['mod']}, {res['satir']} rows)", f"Kalibrasyon uygulandı: {f.ad} ({res['mod']}, {res['satir']} satır)"))
     return res
 
 
@@ -748,7 +781,7 @@ async def api_calib(fid: str, request: Request, uygula: bool = False):
 def api_calib_reset(fid: str):
     f = world.fmap.get(fid)
     if not f:
-        raise HTTPException(404, "Site not found")
+        raise HTTPException(404, L("Site not found", "Tesis bulunamadı"))
     s = f.s
     f.rated_kw, f.rate_h = s["kw_kisi"] * f.calisan, s["uretim_kisi_saat"] * f.calisan
     f.gaz_k, f.su_k, f.profile, f.kalibre = s["gaz_kisi"], s["su_kisi"], None, None
@@ -773,7 +806,7 @@ async def _rebuild(cfg, save):
     except Exception as e:  # noqa: BLE001
         from .sim import geo
         geo.configure(world.cfg)    # restore the map layout of the current zone
-        raise HTTPException(400, f"Could not build the zone: {e}")
+        raise HTTPException(400, L(f"Could not build the zone: {e}", f"Bölge kurulamadı: {e}"))
     for _ in range(PREWARM_MIN):
         nw.tick()
     world = nw
@@ -785,7 +818,7 @@ async def _rebuild(cfg, save):
         os.remove(BOLGE_PATH)
     forecast_cache.update(dk=-10 ** 9, veri=None)
     verse_state["sonuc"] = None
-    world.log("sistem", f"Zone rebuilt: {world.name} · {len(world.factories)} sites")
+    world.log("sistem", L(f"Zone rebuilt: {world.name} · {len(world.factories)} sites", f"Bölge yeniden kuruldu: {world.name} · {len(world.factories)} tesis"))
     await broadcast(json.dumps({"tip": "yeniden"}))
     return {"ok": True, "ad": world.name, "tesis": len(world.factories)}
 
@@ -794,9 +827,9 @@ async def _rebuild(cfg, save):
 async def api_zone_set(cfg: dict):
     t = cfg.get("tesisler") or []
     if not t:
-        raise HTTPException(400, "At least one site is required")
+        raise HTTPException(400, L("At least one site is required", "En az bir tesis gerekli"))
     if len(t) > 200:
-        raise HTTPException(400, "At most 200 sites")
+        raise HTTPException(400, L("At most 200 sites", "En fazla 200 tesis"))
     return await _rebuild(cfg, True)
 
 
@@ -831,5 +864,5 @@ def index():
 @app.exception_handler(404)
 async def nf(request, exc):
     if request.url.path.startswith("/api"):
-        return JSONResponse({"detail": getattr(exc, "detail", "Not found")}, status_code=404)
+        return JSONResponse({"detail": getattr(exc, "detail", L("Not found", "Bulunamadı"))}, status_code=404)
     return FileResponse(os.path.join(STATIC, "index.html"))

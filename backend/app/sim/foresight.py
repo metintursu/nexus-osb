@@ -3,21 +3,22 @@
 Forecast  — N copies of the current state run 24 hours ahead with different random seeds (Monte Carlo);
             yields hourly means, a p10/p90 band and substation overload probabilities.
 Universes — two copies from the same starting point run for days under different policies; results side by side."""
+from ..i18n import L, LANG, TN
 import copy
 import time
 
 MARGIN = 0.12      # default gross margin used to turn revenue change into profit
 
 POLICIES = {
-    "mevcut": {"ad": "Current settings", "aciklama": "Today's settings as they are"},
-    "klasik": {"ad": "Classic zone", "aciklama": "Battery off, no demand response, no agents, no shared fleet, no symbiosis, no H2, 0% water reuse, autopilot off",
+    "mevcut": {"ad": L("Current settings", "Bugünkü ayarlar"), "aciklama": L("Today's settings as they are", "Şu anki ayarlar olduğu gibi")},
+    "klasik": {"ad": L("Classic zone", "Klasik OSB"), "aciklama": L("Battery off, no demand response, no agents, no shared fleet, no symbiosis, no H2, 0% water reuse, autopilot off", "Batarya kapalı, talep kaydırma yok, ajanlar yok, ortak havuz yok, simbiyoz yok, H2 yok, su geri kazanımı %0, otopilot kapalı"),
                "bess": "kapali", "dr": False, "havuz": False, "su": 0.0, "otopilot": False, "simbiyoz_kapat": True, "h2": False, "ajan": False,
                "ajan_kapali": True},
-    "otopilot": {"ad": "NEXUS Autopilot", "aciklama": "Autopilot with all rules on; agents autonomous",
+    "otopilot": {"ad": L("NEXUS Autopilot", "NEXUS Otopilot"), "aciklama": L("Autopilot with all rules on; agents autonomous", "Otopilot ve tüm kuralları açık; ajanlar otonom"),
                  "bess": "otomatik", "dr": True, "otopilot": True, "ajan": True, "h2": True},
-    "yesil": {"ad": "Max green", "aciklama": "Autopilot + 40% water reuse + H2 + every viable symbiosis link set up from the start",
+    "yesil": {"ad": L("Max green", "Yeşil maksimum"), "aciklama": L("Autopilot + 40% water reuse + H2 + every viable symbiosis link set up from the start", "Otopilot + su %40 + H2 + tüm uygun simbiyozlar baştan kurulur"),
               "bess": "otomatik", "dr": True, "havuz": True, "su": 0.40, "otopilot": True, "ajan": True, "h2": True, "simbiyoz_hepsi": True},
-    "tasarruf": {"ad": "Energy savings only", "aciklama": "Battery + demand response on; logistics and circularity untouched",
+    "tasarruf": {"ad": L("Energy savings only", "Yalnız enerji tasarrufu"), "aciklama": L("Battery + demand response on; logistics and circularity untouched", "Batarya + talep kaydırma açık; lojistik ve döngüsellik dokunulmaz"),
                  "bess": "otomatik", "dr": True, "otopilot": False},
 }
 
@@ -162,9 +163,9 @@ def forecast(snapshots, hours=24):
     for row in out:
         for k, p in enumerate(row["tm_risk"]):
             if p >= 0.3:
-                alerts.append({"t": row["t"], "metin": f"TM-{k+1} overload probability {p*100:.0f}%", "seviye": "kritik" if p >= 0.6 else "uyari"})
+                alerts.append({"t": row["t"], "metin": L(f"TM-{k+1} overload probability {p*100:.0f}%", f"TM-{k+1} aşırı yük olasılığı %{TN(p*100, 0)}"), "seviye": "kritik" if p >= 0.6 else "uyari"})
         if row["asim_risk"] >= 0.5:
-            alerts.append({"t": row["t"], "metin": f"Contract capacity breach probability {row['asim_risk']*100:.0f}%", "seviye": "uyari"})
+            alerts.append({"t": row["t"], "metin": L(f"Contract capacity breach probability {row['asim_risk']*100:.0f}%", f"Sözleşme gücü aşım olasılığı %{TN(row['asim_risk']*100, 0)}"), "seviye": "uyari"})
         if row["koi_risk"] >= 0.3:
-            alerts.append({"t": row["t"], "metin": f"Wastewater COD breach probability {row['koi_risk']*100:.0f}%", "seviye": "uyari"})
+            alerts.append({"t": row["t"], "metin": L(f"Wastewater COD breach probability {row['koi_risk']*100:.0f}%", f"Arıtma KOİ sınır aşımı olasılığı %{TN(row['koi_risk']*100, 0)}"), "seviye": "uyari"})
     return {"saatler": out, "uyarilar": alerts[:30], "kosu": n, "saat": hours}

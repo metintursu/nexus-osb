@@ -1,4 +1,5 @@
 """Excel/CSV reader: understands both English and Turkish number/date formats (1,234.56 · 1.234,56 · 2026-11-04 13:00 · 04.11.2026 13:00)."""
+from .i18n import L, LANG
 import csv
 import io
 import re
@@ -75,7 +76,7 @@ def read(name, raw):
         ws = wb.worksheets[0]
         grid = [list(r) for r in ws.iter_rows(values_only=True)]
     elif name.endswith(".xls"):
-        raise ValueError("The old .xls format is not supported; use 'Save As → .xlsx' in Excel and upload again")
+        raise ValueError(L("The old .xls format is not supported; use 'Save As → .xlsx' in Excel and upload again", "Eski .xls biçimi desteklenmiyor; Excel'de 'Farklı Kaydet → .xlsx' ile kaydedip yükle"))
     else:
         text = None
         for enc in ("utf-8-sig", "cp1254", "latin-1"):
@@ -94,7 +95,7 @@ def read(name, raw):
             hi = i
             break
     if hi is None:
-        raise ValueError("No header row found (the first row must contain column names)")
+        raise ValueError(L("No header row found (the first row must contain column names)", "Başlık satırı bulunamadı (ilk satırda sütun adları olmalı)"))
     heads = [norm(h) for h in grid[hi]]
     rows = []
     for r in grid[hi + 1:]:
@@ -102,7 +103,7 @@ def read(name, raw):
             continue
         rows.append({heads[j]: r[j] for j in range(min(len(heads), len(r))) if heads[j]})
     if not rows:
-        raise ValueError("The file has no data rows")
+        raise ValueError(L("The file has no data rows", "Dosyada veri satırı yok"))
     return rows
 
 
@@ -119,7 +120,7 @@ def stamps(rows):
     tc = find(heads, "datetime", "timestamp", "tarih_saat", "zaman", "tarih", "date", "time", "period", "month", "donem", "ay")
     sc = find(heads, "saat", "hour", avoid=("tarih",)) if tc != find(heads, "saat") else None
     if not tc:
-        raise ValueError("No date column found (e.g. 'Date' or 'Time')")
+        raise ValueError(L("No date column found (e.g. 'Date' or 'Time')", "Tarih sütunu bulunamadı (ör. 'Tarih' veya 'Zaman')"))
     out = []
     for r in rows:
         d = dt(r.get(tc), r.get(sc) if sc else None)
@@ -143,11 +144,11 @@ def price_days(rows):
 
 
 def template_csv():
-    lines = ["date,hour,kwh,output,gas_m3,water_m3"]
+    lines = [L("date,hour,kwh,output,gas_m3,water_m3", "tarih;saat;kwh;uretim;gaz_m3;su_m3")]
     base = datetime(2026, 10, 6)
     for i in range(48):
         d = base + timedelta(hours=i)
         work = 6 <= d.hour < 22
         kwh = 1450 if work else 260
-        lines.append(f"{d:%Y-%m-%d},{d:%H}:00,{kwh},{620 if work else 0},{140 if work else 15},{14 if work else 4}")
+        lines.append(L(f"{d:%Y-%m-%d},{d:%H}:00,{kwh},{620 if work else 0},{140 if work else 15},{14 if work else 4}", f"{d:%d.%m.%Y};{d:%H}:00;{kwh};{620 if work else 0};{140 if work else 15};{14 if work else 4}"))
     return "\n".join(lines) + "\n"

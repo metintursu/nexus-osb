@@ -18,48 +18,48 @@ export default {
   async mount(root, ctx) {
     Z = await api("/bolge");
     cfg = JSON.parse(JSON.stringify(Z.cfg));
-    root.innerHTML = `<div class="note">Draw your own industrial zone: set the block grid, where the shared facilities go, and the factories. Pick a factory in the table, then click a plot on the map to place it. When you press <b>Apply</b>, the zone is rebuilt from this plan and every module (energy, logistics, symbiosis, 3D…) runs on the new zone.</div>
+    root.innerHTML = `<div class="note">${L(`Draw your own industrial zone: set the block grid, where the shared facilities go, and the factories. Pick a factory in the table, then click a plot on the map to place it. When you press`, `Kendi organize sanayi bölgeni çiz: ada ızgarasını, ortak tesislerin yerini ve fabrikaları belirle. Bir fabrikayı tablodan seçip haritada bir parsele tıklayarak yerleştir.`)} <b>${L(`Apply`, `Uygula`)}</b>${L(`, the zone is rebuilt from this plan and every module (energy, logistics, symbiosis, 3D…) runs on the new zone.`, `deyince bölge bu plana göre yeniden kurulur; tüm modüller (enerji, lojistik, simbiyoz, 3D…) yeni bölgeyle çalışır.`)}</div>
       <div class="grid mt" style="grid-template-columns:340px minmax(0,1fr)">
         <div class="card" id="zset"></div>
         <div class="card" style="padding:10px"><canvas id="zc" style="width:100%;display:block;cursor:pointer"></canvas><div class="muted" style="font-size:12px;margin-top:6px" id="zhint"></div></div></div>
-      <div class="card mt"><div class="card-h"><h3>Sites</h3><span class="sub" id="zcnt"></span><span class="act"><button class="btn sm" id="zadd">+ Add site</button><button class="btn sm" id="zauto">Clear positions (auto-place)</button></span></div>
+      <div class="card mt"><div class="card-h"><h3>${L(`Sites`, `Tesisler`)}</h3><span class="sub" id="zcnt"></span><span class="act"><button class="btn sm" id="zadd">${L(`+ Add site`, `+ Tesis ekle`)}</button><button class="btn sm" id="zauto">${L(`Clear positions (auto-place)`, `Konumları temizle (otomatik yerleşsin)`)}</button></span></div>
         <div class="tbl-wrap"><table class="tbl" id="zt"></table></div></div>
       <div class="card mt" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
-        <button class="btn pri" id="zapply" style="font-size:15px;padding:11px 20px">✔ Apply and rebuild the zone</button>
-        <button class="btn" id="zexp">Download JSON</button><label class="btn">Load JSON<input type="file" id="zimp" accept=".json" style="display:none"></label>
-        <button class="btn danger" id="zdef" style="margin-left:auto">Back to the default demo zone</button><span class="muted" id="zst"></span></div>`;
+        <button class="btn pri" id="zapply" style="font-size:15px;padding:11px 20px">${L(`✔ Apply and rebuild the zone`, `✔ Uygula ve bölgeyi yeniden kur`)}</button>
+        <button class="btn" id="zexp">${L(`Download JSON`, `JSON indir`)}</button><label class="btn">${L(`Load JSON`, `JSON yükle`)}<input type="file" id="zimp" accept=".json" style="display:none"></label>
+        <button class="btn danger" id="zdef" style="margin-left:auto">${L(`Back to the default demo zone`, `Varsayılan demo bölgeye dön`)}</button><span class="muted" id="zst"></span></div>`;
     this.settings(ctx); this.table(ctx); this.draw();
     const cv = $("#zc");
     cv.addEventListener("click", (e) => this.click(e));
     new ResizeObserver(() => this.draw()).observe(cv);
-    $("#zadd").onclick = () => { cfg.tesisler.push({ ad: `New Site ${cfg.tesisler.length + 1}`, sektor: "otomotiv", calisan: 200, vardiya: 2 }); sel = cfg.tesisler.length - 1; this.table(ctx); this.draw(); };
+    $("#zadd").onclick = () => { cfg.tesisler.push({ ad: `${L(`New Site`, `Yeni Tesis`)} ${cfg.tesisler.length + 1}`, sektor: "otomotiv", calisan: 200, vardiya: 2 }); sel = cfg.tesisler.length - 1; this.table(ctx); this.draw(); };
     $("#zauto").onclick = () => { cfg.tesisler.forEach((t) => { delete t.ada; delete t.parsel; }); this.table(ctx); this.draw(); };
-    $("#zexp").onclick = () => { const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([JSON.stringify(cfg, null, 1)], { type: "application/json" })); a.download = `${(cfg.ad || "zone").replace(/\s+/g, "-")}.json`; a.click(); };
-    $("#zimp").onchange = async (e) => { try { cfg = JSON.parse(await e.target.files[0].text()); cfg.tesisler = cfg.tesisler || []; cfg.sutun = cfg.sutun || 4; cfg.satir = cfg.satir || 3; this.settings(ctx); this.table(ctx); this.draw(); ctx.toast("Plan loaded — don't forget to apply it", "ok"); } catch (err) { ctx.toast("Could not read JSON", "uyari"); } };
+    $("#zexp").onclick = () => { const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([JSON.stringify(cfg, null, 1)], { type: "application/json" })); a.download = `${(cfg.ad || L("zone", "bolge")).replace(/\s+/g, "-")}.json`; a.click(); };
+    $("#zimp").onchange = async (e) => { try { cfg = JSON.parse(await e.target.files[0].text()); cfg.tesisler = cfg.tesisler || []; cfg.sutun = cfg.sutun || 4; cfg.satir = cfg.satir || 3; this.settings(ctx); this.table(ctx); this.draw(); ctx.toast(L("Plan loaded — don't forget to apply it", "Plan yüklendi — uygulamayı unutma"), "ok"); } catch (err) { ctx.toast(L("Could not read JSON", "JSON okunamadı"), "uyari"); } };
     $("#zapply").onclick = async () => {
-      if (!cfg.tesisler.length) { ctx.toast("Add at least one site", "uyari"); return; }
-      $("#zapply").disabled = true; $("#zst").textContent = "Building the zone, running a 32-hour warm-up…";
-      try { await api("/bolge", cfg); $("#zst").textContent = "Built, reloading the page…"; setTimeout(() => location.reload(), 1200); }
+      if (!cfg.tesisler.length) { ctx.toast(L("Add at least one site", "En az bir tesis ekle"), "uyari"); return; }
+      $("#zapply").disabled = true; $("#zst").textContent = L("Building the zone, running a 32-hour warm-up…", "Bölge kuruluyor, 32 saatlik ön ısıtma yapılıyor…");
+      try { await api("/bolge", cfg); $("#zst").textContent = L("Built, reloading the page…", "Kuruldu, sayfa yenileniyor…"); setTimeout(() => location.reload(), 1200); }
       catch (err) { $("#zst").textContent = err.message; $("#zapply").disabled = false; }
     };
-    $("#zdef").onclick = async () => { $("#zst").textContent = "Building the demo zone…"; await api("/bolge/varsayilan", {}); setTimeout(() => location.reload(), 1200); };
+    $("#zdef").onclick = async () => { $("#zst").textContent = L("Building the demo zone…", "Demo bölge kuruluyor…"); await api("/bolge/varsayilan", {}); setTimeout(() => location.reload(), 1200); };
   },
   settings(ctx) {
     const R = reserved(), C = cfg.sutun, Rw = cfg.satir;
     const adas = []; for (let r = 0; r < Rw; r++) for (let c = 0; c < C; c++) adas.push([c, r]);
-    const ao = (v) => adas.filter(([c, r]) => !(c === 0 && r === 0)).map(([c, r]) => `<option value="${c},${r}" ${v[0] === c && v[1] === r ? "selected" : ""}>Block ${c + 1}-${r + 1}</option>`).join("");
-    $("#zset").innerHTML = `<div class="card-h"><h3>Zone settings</h3>${Z.ozel ? `<span class="tag t-acc">custom plan</span>` : `<span class="tag">demo</span>`}</div>
+    const ao = (v) => adas.filter(([c, r]) => !(c === 0 && r === 0)).map(([c, r]) => `<option value="${c},${r}" ${v[0] === c && v[1] === r ? "selected" : ""}${L(`>Block`, `>Ada`)} ${c + 1}-${r + 1}</option>`).join("");
+    $("#zset").innerHTML = `<div class="card-h"><h3>${L(`Zone settings`, `Bölge ayarları`)}</h3>${Z.ozel ? `<span class="tag t-acc">${L(`custom plan`, `özel plan`)}</span>` : `<span class="tag">demo</span>`}</div>
       <div style="display:grid;grid-template-columns:130px 1fr;gap:9px;align-items:center;font-size:13px">
-        <span>Zone name</span><input class="inp" id="z-ad" value="${esc(cfg.ad || "")}">
-        <span>Block columns</span><input class="inp" id="z-c" type="number" min="2" max="8" value="${C}">
-        <span>Block rows</span><input class="inp" id="z-r" type="number" min="2" max="6" value="${Rw}">
-        <span>Energy block</span><select class="inp" id="z-en">${ao(R.en)}</select>
-        <span>Utility block</span><select class="inp" id="z-hz">${ao(R.hz)}</select>
-        <span>Solar (kWp)</span><input class="inp" id="z-ges" type="number" step="500" value="${cfg.ges_kwp || 18000}">
-        <span>Battery (kWh)</span><input class="inp" id="z-bess" type="number" step="1000" value="${cfg.bess_kwh || 28000}">
-        <span>Hydrogen Valley</span><label class="switch ${cfg.hidrojen === false ? "" : "on"}" id="z-h2"><i></i><span>build if a plot is free</span></label></div>
-      <div class="muted mt" style="font-size:12px">Each block has 2×2 = 4 plots. Energy block: solar + battery + main substation. Utility block: wastewater plant + logistics hub. The first plot of Block 1-1 is Zone Management and the fire brigade.</div>
-      <div class="mt" style="font-size:13px">Capacity: <b class="num" id="z-cap"></b> plots</div>`;
+        <span>${L(`Zone name`, `Bölge adı`)}</span><input class="inp" id="z-ad" value="${esc(cfg.ad || "")}">
+        <span>${L(`Block columns`, `Ada sütunu`)}</span><input class="inp" id="z-c" type="number" min="2" max="8" value="${C}">
+        <span>${L(`Block rows`, `Ada satırı`)}</span><input class="inp" id="z-r" type="number" min="2" max="6" value="${Rw}">
+        <span>${L(`Energy block`, `Enerji adası`)}</span><select class="inp" id="z-en">${ao(R.en)}</select>
+        <span>${L(`Utility block`, `Hizmet adası`)}</span><select class="inp" id="z-hz">${ao(R.hz)}</select>
+        <span>${L(`Solar (kWp)`, `GES (kWp)`)}</span><input class="inp" id="z-ges" type="number" step="500" value="${cfg.ges_kwp || 18000}">
+        <span>${L(`Battery (kWh)`, `Batarya (kWh)`)}</span><input class="inp" id="z-bess" type="number" step="1000" value="${cfg.bess_kwh || 28000}">
+        <span>${L(`Hydrogen Valley`, `Hidrojen Vadisi`)}</span><label class="switch ${cfg.hidrojen === false ? "" : "on"}" id="z-h2"><i></i><span>${L(`build if a plot is free`, `boş parsel varsa kur`)}</span></label></div>
+      <div class="muted mt" style="font-size:12px">${L(`Each block has 2×2 = 4 plots. Energy block: solar + battery + main substation. Utility block: wastewater plant + logistics hub. The first plot of Block 1-1 is Zone Management and the fire brigade.`, `Her ada 2×2 = 4 parsel. Enerji adası: GES + batarya + ana indirici. Hizmet adası: arıtma + lojistik merkezi. Ada 1-1'in ilk parseli OSB Yönetim ve itfaiyedir.`)}</div>
+      <div class="mt" style="font-size:13px">${L(`Capacity:`, `Kapasite:`)} <b class="num" id="z-cap"></b> ${L(`plots`, `parsel`)}</div>`;
     const upd = () => {
       cfg.ad = $("#z-ad").value; cfg.sutun = Math.max(2, Math.min(8, +$("#z-c").value || 4)); cfg.satir = Math.max(2, Math.min(6, +$("#z-r").value || 3));
       cfg.ges_kwp = +$("#z-ges").value; cfg.bess_kwh = +$("#z-bess").value; cfg.bess_kw = cfg.bess_kwh / 2;
@@ -74,21 +74,21 @@ export default {
   table(ctx) {
     const S = Z.sektorler;
     const cap = capacity(), n = cfg.tesisler.length;
-    $("#zcnt").innerHTML = `${n} sites · ${cap} plots${n > cap ? ` <span class="t-crit">— ${n - cap} sites do not fit</span>` : ""}`;
-    $("#zt").innerHTML = `<tr><th></th><th>Site name</th><th>Sector</th><th class="r">Employees</th><th>Shifts</th><th>Position</th><th></th></tr>` + cfg.tesisler.map((t, i) => `<tr data-i="${i}" style="${sel === i ? "background:rgba(34,211,238,.08)" : ""}">
-      <td><input type="radio" name="zsel" ${sel === i ? "checked" : ""} data-sel="${i}" title="Select, then click a plot on the map"></td>
+    $("#zcnt").innerHTML = `${n} ${L(`sites ·`, `tesis ·`)} ${cap} ${L(`plots`, `parsel`)}${n > cap ? ` <span class="t-crit">— ${n - cap} ${L(`sites do not fit`, `tesis sığmıyor`)}</span>` : ""}`;
+    $("#zt").innerHTML = `<tr><th></th><th>${L(`Site name`, `Tesis adı`)}</th><th>${L(`Sector`, `Sektör`)}</th><th class="r">${L(`Employees`, `Çalışan`)}</th><th>${L(`Shifts`, `Vardiya`)}</th><th>${L(`Position`, `Konum`)}</th><th></th></tr>` + cfg.tesisler.map((t, i) => `<tr data-i="${i}" style="${sel === i ? "background:rgba(34,211,238,.08)" : ""}">
+      <td><input type="radio" name="zsel" ${sel === i ? "checked" : ""} data-sel="${i}${L(`" title="Select, then click a plot on the map">`, `" title="Seç, sonra haritada parsele tıkla">`)}</td>
       <td><input class="inp" data-k="ad" value="${esc(t.ad)}" style="width:200px"></td>
       <td><select class="inp" data-k="sektor">${Object.entries(S).map(([k, v]) => `<option value="${k}" ${t.sektor === k ? "selected" : ""}>${esc(v.ad)}</option>`).join("")}</select></td>
-      <td class="r"><input class="inp" data-k="calisan" type="number" value="${t.calisan || ""}" placeholder="auto" style="width:90px"></td>
+      <td class="r"><input class="inp" data-k="calisan" type="number" value="${t.calisan || ""}${L(`" placeholder="auto" style="width:90px">`, `" placeholder="oto" style="width:90px">`)}</td>
       <td><select class="inp" data-k="vardiya">${[1, 2, 3].map((v) => `<option ${+t.vardiya === v ? "selected" : ""}>${v}</option>`).join("")}</select></td>
-      <td>${t.ada ? `Block ${t.ada[0] + 1}-${t.ada[1] + 1} · P${t.parsel + 1}` : `<span class="muted">auto</span>`}</td>
-      <td><button class="btn sm danger" data-del="${i}">Delete</button></td></tr>`).join("");
+      <td>${t.ada ? `${L(`Block`, `Ada`)} ${t.ada[0] + 1}-${t.ada[1] + 1} · P${t.parsel + 1}` : `<span class="muted">${L(`auto`, `otomatik`)}</span>`}</td>
+      <td><button class="btn sm danger" data-del="${i}${L(`">Delete`, `">Sil`)}</button></td></tr>`).join("");
     $$("#zt [data-k]").forEach((el) => el.onchange = () => {
       const t = cfg.tesisler[+el.closest("tr").dataset.i];
       t[el.dataset.k] = el.dataset.k === "calisan" || el.dataset.k === "vardiya" ? (+el.value || undefined) : el.value;
       this.draw();
     });
-    $$("#zt [data-sel]").forEach((el) => el.onchange = () => { sel = +el.dataset.sel; $("#zhint").textContent = `Selected: ${cfg.tesisler[sel].ad} — click a plot on the map`; this.table(ctx); this.draw(); });
+    $$("#zt [data-sel]").forEach((el) => el.onchange = () => { sel = +el.dataset.sel; $("#zhint").textContent = `${L(`Selected:`, `Seçili:`)} ${cfg.tesisler[sel].ad} ${L(`— click a plot on the map`, `— haritada bir parsele tıkla`)}`; this.table(ctx); this.draw(); });
     $$("#zt [data-del]").forEach((b) => b.onclick = () => { cfg.tesisler.splice(+b.dataset.del, 1); sel = null; this.table(ctx); this.draw(); });
   },
   geom() {
@@ -115,17 +115,17 @@ export default {
       if (isEn || isHz) {
         g.fillStyle = isEn ? "#0b1a33" : "#0c1a2c"; g.fillRect(x, y, w, h);
         g.fillStyle = isEn ? "#93c5fd" : "#7dd3fc"; g.font = "600 12px Inter, sans-serif"; g.textAlign = "center";
-        g.fillText(isEn ? "☀ ENERGY BLOCK" : "💧 UTILITY BLOCK", x + w / 2, y + h / 2 - 4);
-        g.fillStyle = "#64748b"; g.font = "10.5px Inter, sans-serif"; g.fillText(isEn ? "solar · battery · main substation" : "wastewater · logistics hub", x + w / 2, y + h / 2 + 12);
+        g.fillText(isEn ? L("☀ ENERGY BLOCK", "☀ ENERJİ ADASI") : L("💧 UTILITY BLOCK", "💧 HİZMET ADASI"), x + w / 2, y + h / 2 - 4);
+        g.fillStyle = "#64748b"; g.font = "10.5px Inter, sans-serif"; g.fillText(isEn ? L("solar · battery · main substation", "GES · batarya · ana indirici") : L("wastewater · logistics hub", "arıtma · lojistik merkezi"), x + w / 2, y + h / 2 + 12);
         continue;
       }
-      g.fillStyle = "#64748b"; g.font = "10px Inter, sans-serif"; g.textAlign = "left"; g.fillText(`Block ${c + 1}-${r + 1}`, x, y - 2);
+      g.fillStyle = "#64748b"; g.font = "10px Inter, sans-serif"; g.textAlign = "left"; g.fillText(`${L(`Block`, `Ada`)} ${c + 1}-${r + 1}`, x, y - 2);
       const pw = (w - 6) / 2, ph = (h - 6) / 2;
       for (let s = 0; s < 4; s++) {
         const px = x + (s % 2) * (pw + 6), py = y + Math.floor(s / 2) * (ph + 6);
         const hq = c === 0 && r === 0 && s === 0, idx = occ[SLOT(c, r, s)];
-        let fill = "#0f182b", txt = "empty", tc = "#334155";
-        if (hq) { fill = "#1d1745"; txt = "Zone Management"; tc = "#c4b5fd"; }
+        let fill = "#0f182b", txt = L("empty", "boş"), tc = "#334155";
+        if (hq) { fill = "#1d1745"; txt = L("Zone Management", "OSB Yönetim"); tc = "#c4b5fd"; }
         else if (idx != null) { const t = cfg.tesisler[idx], sc = Z.sektorler[t.sektor] || {}; fill = sc.renk || "#22d3ee"; txt = t.ad; tc = "#06101d"; }
         g.fillStyle = fill; g.globalAlpha = idx != null ? 0.85 : 1; g.fillRect(px, py, pw, ph); g.globalAlpha = 1;
         g.strokeStyle = idx != null && idx === sel ? "#fff" : "#26375a"; g.lineWidth = idx != null && idx === sel ? 2.5 : 1; g.strokeRect(px + 0.5, py + 0.5, pw - 1, ph - 1);
@@ -136,7 +136,7 @@ export default {
       }
     }
     const unplaced = cfg.tesisler.filter((t) => !t.ada).length;
-    $("#zhint").textContent = sel != null ? `Selected: ${cfg.tesisler[sel] ? cfg.tesisler[sel].ad : ""} — click a plot (swaps places on an occupied plot)` : `${unplaced} sites will be placed automatically. To place one, select a site in the table, then click a plot.`;
+    $("#zhint").textContent = sel != null ? `${L(`Selected:`, `Seçili:`)} ${cfg.tesisler[sel] ? cfg.tesisler[sel].ad : ""} ${L(`— click a plot (swaps places on an occupied plot)`, `— bir parsele tıkla (dolu parselde yer değiştirir)`)}` : `${unplaced} ${L(`sites will be placed automatically. To place one, select a site in the table, then click a plot.`, `tesis otomatik yerleşecek. Yerleştirmek için tablodan bir tesis seç, sonra parsele tıkla.`)}`;
   },
   click(e) {
     if (sel == null || !this.cells) return;

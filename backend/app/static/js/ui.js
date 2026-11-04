@@ -9,31 +9,48 @@ export function h(html) {
 }
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 
-const nf = (d) => new Intl.NumberFormat("en-US", { minimumFractionDigits: d, maximumFractionDigits: d });
+// ---------------------------------------------------------- language (EN / TR)
+// The language lives on the server (/api/dil) so backend messages and the UI always match.
+export const LANG = await fetch("/api/dil").then((r) => r.json()).then((d) => (d.dil === "tr" ? "tr" : "en")).catch(() => "en");
+export const L = (en, tr) => (LANG === "tr" ? tr : en);
+globalThis.L = L;
+globalThis.LANG = LANG;
+document.documentElement.lang = LANG;
+
+const nf = (d) => new Intl.NumberFormat(L("en-US", "tr-TR"), { minimumFractionDigits: d, maximumFractionDigits: d });
 const NF = [nf(0), nf(1), nf(2), nf(3)];
+const TR = LANG === "tr";
 export const fmt = {
   n: (x, d = 0) => (x == null || isNaN(x) ? "—" : NF[d].format(x)),
-  tl: (x) => (x == null ? "—" : (x < 0 ? "-₺" : "₺") + NF[0].format(Math.abs(Math.round(x)))),
+  tl: (x) => (x == null ? "—" : TR ? NF[0].format(Math.round(x)) + " ₺" : (x < 0 ? "-₺" : "₺") + NF[0].format(Math.abs(Math.round(x)))),
   ktl: (x) => {
     if (x == null) return "—";
-    const a = Math.abs(x), s = x < 0 ? "-₺" : "₺";
+    const a = Math.abs(x);
+    if (TR) {
+      if (a >= 1e9) return NF[2].format(x / 1e9) + " Mr ₺";
+      if (a >= 1e6) return NF[2].format(x / 1e6) + " M ₺";
+      if (a >= 1e3) return NF[1].format(x / 1e3) + " B ₺";
+      return NF[0].format(x) + " ₺";
+    }
+    const s = x < 0 ? "-₺" : "₺";
     if (a >= 1e9) return s + NF[2].format(a / 1e9) + "B";
     if (a >= 1e6) return s + NF[2].format(a / 1e6) + "M";
     if (a >= 1e3) return s + NF[1].format(a / 1e3) + "k";
     return s + NF[0].format(a);
   },
+  price: (x, d = 0) => (x == null ? "—" : TR ? NF[d].format(x) + " ₺" : (x < 0 ? "-₺" : "₺") + NF[d].format(Math.abs(x))),
   mw: (kw, d = 1) => (kw == null ? "—" : NF[d].format(kw / 1000)),
-  pct: (x, d = 0) => (x == null ? "—" : NF[d].format(x * 100) + "%"),
-  t: (m) => { const d = Math.floor(m / 1440) + 1, mm = m % 1440; return `D${d} ${String(Math.floor(mm / 60)).padStart(2, "0")}:${String(mm % 60).padStart(2, "0")}`; },
+  pct: (x, d = 0) => (x == null ? "—" : TR ? "%" + NF[d].format(x * 100) : NF[d].format(x * 100) + "%"),
+  t: (m) => { const d = Math.floor(m / 1440) + 1, mm = m % 1440; return `${L("D", "G")}${d} ${String(Math.floor(mm / 60)).padStart(2, "0")}:${String(mm % 60).padStart(2, "0")}`; },
   hm: (m) => { const mm = ((m % 1440) + 1440) % 1440; return `${String(Math.floor(mm / 60)).padStart(2, "0")}:${String(mm % 60).padStart(2, "0")}`; },
-  dur: (m) => (m >= 60 ? `${Math.floor(m / 60)} h ${m % 60} min` : `${m} min`),
+  dur: (m) => (m >= 60 ? `${Math.floor(m / 60)} ${L("h", "sa")} ${m % 60} ${L("min", "dk")}` : `${m} ${L("min", "dk")}`),
 };
 
-export const STATUS = { calisiyor: "Running", bosta: "Off shift", ariza: "Fault", bakim: "Maintenance", durdu: "Stopped" };
+export const STATUS = { calisiyor: L("Running", "Çalışıyor"), bosta: L("Off shift", "Vardiya dışı"), ariza: L("Fault", "Arıza"), bakim: L("Maintenance", "Bakım"), durdu: L("Stopped", "Durdu") };
 export const STATUS_COLOR = { calisiyor: "#34d399", bosta: "#475569", ariza: "#fbbf24", bakim: "#60a5fa", durdu: "#f87171" };
-export const TRUCK = { gidiyor: "Heading to pickup", yukleniyor: "Loading", yuklu: "Loaded, en route", bosaltiyor: "Unloading", donus: "Returning to depot", kuyrukta: "Queued at gate", bos: "Idle", yolda: "Heading to incident", mudahalede: "On site", mudahale: "On site" };
-export const ORDER_TIP = { giris: "Inbound raw material", sevkiyat: "Outbound shipment", ic_tedarik: "In-zone supply", simbiyoz: "Symbiosis transfer" };
-export const PERIOD = { gece: "Night", gunduz: "Day", puant: "Peak" };
+export const TRUCK = { gidiyor: L("Heading to pickup", "Yüklemeye gidiyor"), yukleniyor: L("Loading", "Yükleniyor"), yuklu: L("Loaded, en route", "Yüklü yolda"), bosaltiyor: L("Unloading", "Boşaltıyor"), donus: L("Returning to depot", "Depoya dönüyor"), kuyrukta: L("Queued at gate", "Kapı kuyruğunda"), bos: L("Idle", "Boşta"), yolda: L("Heading to incident", "Olay yerine gidiyor"), mudahalede: L("On site", "Müdahalede"), mudahale: L("On site", "Müdahalede") };
+export const ORDER_TIP = { giris: L("Inbound raw material", "Hammadde girişi"), sevkiyat: L("Outbound shipment", "Sevkiyat"), ic_tedarik: L("In-zone supply", "Bölge içi tedarik"), simbiyoz: L("Symbiosis transfer", "Simbiyoz transferi") };
+export const PERIOD = { gece: L("Night", "Gece"), gunduz: L("Day", "Gündüz"), puant: L("Peak", "Puant") };
 export const PERIOD_COLOR = { gece: "#6366f1", gunduz: "#22d3ee", puant: "#f97316" };
 
 export async function api(path, body, method) {
@@ -103,7 +120,7 @@ export function setKpi(id, val, unit, foot, bar) {
 export function lineChart(el, cfg) {
   const W = el.clientWidth || 600, H = cfg.height || 220, pl = 46, pr = 12, pt = 10, pb = 24;
   const series = cfg.series.filter((s) => s.data && s.data.length);
-  if (!series.length) { el.innerHTML = `<div class="empty">Waiting for data…</div>`; return; }
+  if (!series.length) { el.innerHTML = `<div class="empty">${L(`Waiting for data…`, `Veri bekleniyor…`)}</div>`; return; }
   const xs = series[0].data.map((d) => d[0]);
   let x0 = Math.min(...xs), x1 = Math.max(...xs);
   if (x1 === x0) x1 = x0 + 1;
@@ -162,7 +179,7 @@ export function lineChart(el, cfg) {
 
 // ---------------------------------------------------------- horizontal bars
 export function bars(el, items, opt = {}) {
-  if (!items.length) { el.innerHTML = `<div class="empty">${opt.empty || "No data"}</div>`; return; }
+  if (!items.length) { el.innerHTML = `<div class="empty">${opt.empty || L("No data", "Veri yok")}</div>`; return; }
   const mx = opt.max || Math.max(...items.map((i) => i.value), 1e-9);
   el.innerHTML = `<div class="bars">${items.map((i) => `<div class="b-row ${i.click ? "click" : ""}" ${i.id ? `data-id="${i.id}"` : ""} style="${i.click ? "cursor:pointer" : ""}">
       <div class="b-lbl" title="${esc(i.label)}">${i.html || esc(i.label)}</div>
@@ -193,7 +210,7 @@ export function sectorTag(world, s) {
   return `<span class="tag"><span class="sw" style="background:${x.renk}"></span>${esc(x.ad)}</span>`;
 }
 export const st = (d) => `<span class="st st-${d}">${STATUS[d] || d}</span>`;
-export const sev = (s) => `<span class="sev sev-${s}">${{ kritik: "Critical", uyari: "Warning", bilgi: "Info", firsat: "Opportunity" }[s] || s}</span>`;
+export const sev = (s) => `<span class="sev sev-${s}">${{ kritik: L("Critical", "Kritik"), uyari: L("Warning", "Uyarı"), bilgi: L("Info", "Bilgi"), firsat: L("Opportunity", "Fırsat") }[s] || s}</span>`;
 
 export function md(text) {
   // tiny markdown: **bold**, _italic_, leading "- "

@@ -1,4 +1,5 @@
 """Zone logistics: shared fleet, order generation, routing, loading/unloading, gate queues, emergency vehicle."""
+from ..i18n import L, LANG
 import math
 
 from . import geo
@@ -33,12 +34,12 @@ class Truck:
         moved = 0.0
         while self.seg_i < len(self.path) - 1 and speed > 1e-6:
             a, b = self.path[self.seg_i], self.path[self.seg_i + 1]
-            L = math.hypot(b[0] - a[0], b[1] - a[1])
-            rem = L - self.prog
+            seg_len = math.hypot(b[0] - a[0], b[1] - a[1])
+            rem = seg_len - self.prog
             if speed < rem:
                 self.prog += speed
                 moved += speed
-                t = self.prog / L
+                t = self.prog / seg_len
                 self.x, self.y = a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t
                 return False, moved
             speed -= rem
@@ -79,7 +80,7 @@ class Logistics:
         for i in range(48):
             plaka = f"16 NX {100 + i * 7:03d}"
             self.trucks.append(Truck(f"K{i+1:02d}", plaka, self.depot))
-        self.emergency = Truck("FIRE-1", "Zone Fire Brigade", w.hq_seg, "itfaiye")
+        self.emergency = Truck(L("FIRE-1", "ITF-1"), L("Zone Fire Brigade", "OSB İtfaiye"), w.hq_seg, "itfaiye")
         self.orders = []          # waiting + active
         self.done = []            # son teslimler
         self.gate_blocked = {k: False for k in geo.GATES}
@@ -142,7 +143,7 @@ class Logistics:
         if r < 0.38:
             f = self._weighted_factory()
             if f:
-                self.create_order("giris", ("g", gate), ("f", f.id), rng.uniform(8, 20), "Raw material")
+                self.create_order("giris", ("g", gate), ("f", f.id), rng.uniform(8, 20), L("Raw material", "Hammadde"))
         elif r < 0.76:
             f = self._weighted_factory()
             if f:
@@ -188,10 +189,10 @@ class Logistics:
             q = sum(1 for o in self.orders if o.durum == "bekliyor" and (o.src == ("g", g) or o.dst == ("g", g)))
             key = f"kapi:{g}"
             if q >= 8:
-                w.incidents.raise_once(key, "lojistik", f"Shipment queue at {geo.GATES[g]['ad']}", "uyari",
-                                       detay=f"{q} orders waiting at the gate",
-                                       aksiyonlar=["Reroute to the other gate", "Open the shared fleet pool",
-                                                   "Offer temporary storage to sites (marketplace)"])
+                w.incidents.raise_once(key, "lojistik", L(f"Shipment queue at {geo.GATES[g]['ad']}", f"{geo.GATES[g]['ad']} sevkiyat kuyruğu"), "uyari",
+                                       detay=L(f"{q} orders waiting at the gate", f"{q} sipariş kapıda bekliyor"),
+                                       aksiyonlar=[L("Reroute to the other gate", "Diğer kapıya yönlendir"), L("Open the shared fleet pool", "Ortak filo havuzunu aç"),
+                                                   L("Offer temporary storage to sites (marketplace)", "Tesislere geçici depo alanı (pazaryeri) öner")])
             elif q <= 3:
                 w.incidents.resolve_key(key, "Kuyruk eridi")
         # drop stale waiting orders (8 hours)

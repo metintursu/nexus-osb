@@ -2,17 +2,18 @@
 
 When a fault opens, the nearest available technician with the right skill is dispatched; on arrival the
 Digital Master playbook shortens the remaining downtime. Know-how is no longer locked inside one plant."""
+from ..i18n import L, LANG, TN
 from . import geo
 from .logistics import Truck
 
-SKILLS = {"mekanik": "Mechanical", "hidrolik": "Hydraulics/Pneumatics", "elektrik": "Electrical/Drives",
-          "otomasyon": "Automation/PLC", "yakma": "Furnaces & Burners", "sogutma": "Cooling"}
+SKILLS = {"mekanik": L("Mechanical", "Mekanik"), "hidrolik": L("Hydraulics/Pneumatics", "Hidrolik/Pnömatik"), "elektrik": L("Electrical/Drives", "Elektrik/Sürücü"),
+          "otomasyon": L("Automation/PLC", "Otomasyon/PLC"), "yakma": L("Furnaces & Burners", "Fırın & Yakma"), "sogutma": L("Cooling", "Soğutma")}
 MASTERS = [
-    ("Hasan Demir", ["mekanik", "hidrolik"], 31), ("Ayse Kaya", ["otomasyon", "elektrik"], 18),
-    ("Mehmet Celik", ["yakma", "mekanik"], 27), ("Zeynep Arslan", ["elektrik", "otomasyon"], 12),
-    ("Ali Yildiz", ["hidrolik", "mekanik"], 22), ("Fatma Sahin", ["sogutma", "elektrik"], 15),
-    ("Mustafa Aydin", ["mekanik"], 35), ("Elif Ozturk", ["otomasyon"], 9), ("Ibrahim Koc", ["yakma"], 29),
-    ("Emine Kurt", ["sogutma", "hidrolik"], 16), ("Osman Polat", ["elektrik", "mekanik"], 24), ("Derya Acar", ["otomasyon", "hidrolik"], 11),
+    (L("Hasan Demir", "Hasan Usta"), ["mekanik", "hidrolik"], 31), (L("Ayse Kaya", "Ayşe Usta"), ["otomasyon", "elektrik"], 18),
+    (L("Mehmet Celik", "Mehmet Usta"), ["yakma", "mekanik"], 27), (L("Zeynep Arslan", "Zeynep Usta"), ["elektrik", "otomasyon"], 12),
+    (L("Ali Yildiz", "Ali Usta"), ["hidrolik", "mekanik"], 22), (L("Fatma Sahin", "Fatma Usta"), ["sogutma", "elektrik"], 15),
+    (L("Mustafa Aydin", "Mustafa Usta"), ["mekanik"], 35), (L("Elif Ozturk", "Elif Usta"), ["otomasyon"], 9), (L("Ibrahim Koc", "İbrahim Usta"), ["yakma"], 29),
+    (L("Emine Kurt", "Emine Usta"), ["sogutma", "hidrolik"], 16), (L("Osman Polat", "Osman Usta"), ["elektrik", "mekanik"], 24), (L("Derya Acar", "Derya Usta"), ["otomasyon", "hidrolik"], 11),
 ]
 SPEED = 34.0
 CUT = 0.45          # share of remaining downtime removed when the technician arrives
@@ -46,7 +47,7 @@ class Masters:
         self.total["gorev"] += 1
         eta = geo.path_length(t.path) / SPEED
         if inc:
-            inc["kayit"].append((self.w.minute, f"{m['ad']} ({SKILLS.get(skill, skill)}) dispatched · ETA ≈{eta:.0f} min"))
+            inc["kayit"].append((self.w.minute, L(f"{m['ad']} ({SKILLS.get(skill, skill)}) dispatched · ETA ≈{eta:.0f} min", f"{m['ad']} ({SKILLS.get(skill, skill)}) yönlendirildi · varış ≈{TN(eta, 0)} dk")))
             inc["usta"] = m["ad"]
         self._log(f"{m['ad']} → {f.ad} ({SKILLS.get(skill, skill)})")
         return m
@@ -75,7 +76,7 @@ class Masters:
                         self.total["kazanilan_dk"] += cut
                         inc = w.incidents.get(g["olay"]) if g["olay"] else None
                         if inc:
-                            inc["kayit"].append((w.minute, f"{m['ad']} on site · Digital Master playbook applied · downtime cut by {cut:.0f} min"))
+                            inc["kayit"].append((w.minute, L(f"{m['ad']} on site · Digital Master playbook applied · downtime cut by {cut:.0f} min", f"{m['ad']} olay yerinde · Dijital Usta reçetesi uygulandı · duruş {TN(cut, 0)} dk kısaldı")))
                             if inc["durum"] == "acik":
                                 inc["durum"] = "mudahale"
             elif m["durum"] == "mudahalede":
@@ -84,7 +85,7 @@ class Masters:
                     m["mudahale"] += 1
                     m["durum"], m["gorev"] = "musait", None
                     t.state = "bos"
-                    self._log(f"{m['ad']} finished the job at {f.ad}")
+                    self._log(L(f"{m['ad']} finished the job at {f.ad}", f"{m['ad']} {f.ad} görevini tamamladı"))
 
     def live(self):
         return [[m["id"], round(m["t"].x, 1), round(m["t"].y, 1), m["durum"], 0, "usta"] for m in self.items if m["durum"] != "musait"]

@@ -2,13 +2,13 @@ import { $, $$, esc, fmt, kpi, setKpi, lineChart, PERIOD, PERIOD_COLOR } from ".
 
 function flowSvg(e, fac) {
   const W = 760, H = 250;
-  const src = [["Grid", Math.max(0, e.sebeke), "#a78bfa"], ["Solar", e.ges, "#fbbf24"], ["Biogas", e.bio, "#4ade80"], ["Battery", Math.max(0, e.bess), "#34d399"]];
+  const src = [[L("Grid", "Şebeke"), Math.max(0, e.sebeke), "#a78bfa"], [L("Solar", "GES"), e.ges, "#fbbf24"], [L("Biogas", "Biyogaz"), e.bio, "#4ade80"], [L("Battery", "Batarya"), Math.max(0, e.bess), "#34d399"]];
   const fabrikalar = Math.max(0, e.yuk - fac);
-  const dst = [["Plants", fabrikalar, "#22d3ee"], ["Shared facilities", fac, "#60a5fa"], ["Battery charging", Math.max(0, -e.bess), "#34d399"], ["Export to grid", Math.max(0, -e.sebeke), "#f472b6"]];
+  const dst = [[L("Plants", "Fabrikalar"), fabrikalar, "#22d3ee"], [L("Shared facilities", "Ortak tesisler"), fac, "#60a5fa"], [L("Battery charging", "Batarya şarjı"), Math.max(0, -e.bess), "#34d399"], [L("Export to grid", "Şebekeye satış"), Math.max(0, -e.sebeke), "#f472b6"]];
   const tot = Math.max(1, src.reduce((a, s) => a + s[1], 0));
   const bx = W / 2, by = H / 2;
   let out = `<rect x="${bx - 52}" y="${by - 34}" width="104" height="68" rx="12" fill="#0e1a30" stroke="#22d3ee" stroke-width="1.3"/>
-    <text x="${bx}" y="${by - 6}" text-anchor="middle" style="font-weight:600;fill:#e0f2fe">Zone busbar</text>
+    <text x="${bx}" y="${by - 6}${L(`" text-anchor="middle" style="font-weight:600;fill:#e0f2fe">Zone busbar`, `" text-anchor="middle" style="font-weight:600;fill:#e0f2fe">OSB Barası`)}</text>
     <text x="${bx}" y="${by + 14}" text-anchor="middle" style="font-family:var(--f-mono);fill:#22d3ee">${fmt.mw(e.yuk, 1)} MW</text>`;
   src.forEach((s, i) => {
     const y = 36 + i * 58, w = Math.max(1.5, (s[1] / tot) * 26);
@@ -35,27 +35,27 @@ let det = null;
 export default {
   mount(root, ctx) {
     root.innerHTML = `<div class="grid g6">
-      ${kpi("e-yuk", "Total load", "enerji")}${kpi("e-ges", "Solar output", "gunes", "#fbbf24")}${kpi("e-seb", "Grid draw", "enerji", "#a78bfa")}
-      ${kpi("e-bes", "Battery", "pil", "#34d399")}${kpi("e-fat", "Bill today", "para", "#f472b6")}${kpi("e-tas", "Savings today", "simbiyoz", "#4ade80")}</div>
+      ${kpi("e-yuk", L("Total load", "Toplam yük"), "enerji")}${kpi("e-ges", L("Solar output", "GES üretimi"), "gunes", "#fbbf24")}${kpi("e-seb", L("Grid draw", "Şebekeden çekiş"), "enerji", "#a78bfa")}
+      ${kpi("e-bes", L("Battery", "Batarya"), "pil", "#34d399")}${kpi("e-fat", L("Bill today", "Bugün fatura"), "para", "#f472b6")}${kpi("e-tas", L("Savings today", "Bugün kazanım"), "simbiyoz", "#4ade80")}</div>
     <div class="grid mt" style="grid-template-columns:minmax(0,1.3fr) minmax(0,1fr)">
-      <div class="card flow"><div class="card-h"><h3>Live power flow</h3><span class="sub">sources → zone busbar → consumers</span></div><div id="flw"></div></div>
-      <div class="card"><div class="card-h"><h3>Control</h3><span class="sub">battery strategy & demand management</span></div>
+      <div class="card flow"><div class="card-h"><h3>${L(`Live power flow`, `Anlık güç akışı`)}</h3><span class="sub">${L(`sources → zone busbar → consumers`, `kaynaklar → OSB barası → tüketim`)}</span></div><div id="flw"></div></div>
+      <div class="card"><div class="card-h"><h3>${L(`Control`, `Kontrol`)}</h3><span class="sub">${L(`battery strategy & demand management`, `batarya stratejisi & talep yönetimi`)}</span></div>
         <div style="display:grid;gap:14px">
-          <div><div class="muted" style="font-size:12px;margin-bottom:6px">Battery mode</div><div class="seg" id="bm"><button data-m="otomatik">Auto (peak shaving + evening peak)</button><button data-m="puant">Peak only</button><button data-m="kapali">Off</button></div></div>
-          <div><label class="switch" id="drs"><i></i><span>Automatic demand response (shift flexible loads on substation / contract overruns)</span></label></div>
-          <div><div class="muted" style="font-size:12px;display:flex;justify-content:space-between"><span>Resilience reserve held for outages</span><b class="num" id="rzv">30%</b></div>
+          <div><div class="muted" style="font-size:12px;margin-bottom:6px">${L(`Battery mode`, `Batarya modu`)}</div><div class="seg" id="bm"><button data-m="otomatik">${L(`Auto (peak shaving + evening peak)`, `Otomatik (pik tıraşlama + puant)`)}</button><button data-m="puant">${L(`Peak only`, `Yalnız puant`)}</button><button data-m="kapali">${L(`Off`, `Kapalı`)}</button></div></div>
+          <div><label class="switch" id="drs"><i></i><span>${L(`Automatic demand response (shift flexible loads on substation / contract overruns)`, `Otomatik talep tarafı katılım (trafo / sözleşme aşımında esnek yükleri kaydır)`)}</span></label></div>
+          <div><div class="muted" style="font-size:12px;display:flex;justify-content:space-between"><span>${L(`Resilience reserve held for outages`, `Kesintiye karşı dayanıklılık rezervi`)}</span><b class="num" id="rzv">30%</b></div>
             <input type="range" min="0" max="60" step="5" id="rz"></div>
-          <div><button class="btn pri" id="drnow">⇄ Shift load for 60 min now</button> <span class="muted" style="font-size:12px" id="drinfo"></span></div>
-          <div><div class="muted" style="font-size:12px;margin-bottom:6px">Tariff bands (today)</div><div id="tbar"></div></div>
+          <div><button class="btn pri" id="drnow">${L(`⇄ Shift load for 60 min now`, `⇄ Şimdi 60 dk talep kaydır`)}</button> <span class="muted" style="font-size:12px" id="drinfo"></span></div>
+          <div><div class="muted" style="font-size:12px;margin-bottom:6px">${L(`Tariff bands (today)`, `Tarife dilimleri (bugün)`)}</div><div id="tbar"></div></div>
         </div></div></div>
     <div class="grid mt g2">
-      <div class="card"><div class="card-h"><h3>Load and sources</h3><span class="sub">last 24 hours · MW</span></div><div id="ech"></div></div>
-      <div class="card"><div class="card-h"><h3>Battery charge & price</h3><span class="sub">last 24 hours</span></div><div id="sch"></div></div></div>
-    <div class="card mt"><div class="card-h"><h3>🟢 Hydrogen Valley</h3><span class="sub">12 MWp dedicated solar → 6 MW electrolyser → H₂ store → up to 30% blend replacing natural gas in foundry/metal furnaces</span>
-      <span class="act"><label class="switch" id="h2s"><i></i><span>Online</span></label></span></div><div class="grid g6" id="h2g" style="font-size:12.5px"></div></div>
-    <div class="card mt"><div class="card-h"><h3>Substations</h3><span class="sub">above 100% opens an overload incident</span></div><div class="grid g4" id="tms"></div></div>
-    <div class="card mt"><div class="card-h"><h3>Today's energy ledger</h3></div><div class="grid g6" id="led" style="font-size:12.5px"></div></div>`;
-    $$("#bm button").forEach((b) => b.onclick = async () => { det = await ctx.api("/enerji/ayar", { mod: b.dataset.m }); this.paint(ctx); ctx.toast(`Battery mode: ${b.textContent}`, "ok"); });
+      <div class="card"><div class="card-h"><h3>${L(`Load and sources`, `Yük ve kaynaklar`)}</h3><span class="sub">${L(`last 24 hours · MW`, `son 24 saat · MW`)}</span></div><div id="ech"></div></div>
+      <div class="card"><div class="card-h"><h3>${L(`Battery charge & price`, `Batarya doluluk & fiyat`)}</h3><span class="sub">${L(`last 24 hours`, `son 24 saat`)}</span></div><div id="sch"></div></div></div>
+    <div class="card mt"><div class="card-h"><h3>${L(`🟢 Hydrogen Valley`, `🟢 Hidrojen Vadisi`)}</h3><span class="sub">${L(`12 MWp dedicated solar → 6 MW electrolyser → H₂ store → up to 30% blend replacing natural gas in foundry/metal furnaces`, `12 MWp özel GES → 6 MW elektrolizör → H₂ deposu → döküm/metal fırınlarına doğalgaz yerine %30'a kadar karışım`)}</span>
+      <span class="act"><label class="switch" id="h2s"><i></i><span>${L(`Online`, `Devrede`)}</span></label></span></div><div class="grid g6" id="h2g" style="font-size:12.5px"></div></div>
+    <div class="card mt"><div class="card-h"><h3>${L(`Substations`, `Trafo merkezleri`)}</h3><span class="sub">${L(`above 100% opens an overload incident`, `%100 üstü aşırı yük olayı açar`)}</span></div><div class="grid g4" id="tms"></div></div>
+    <div class="card mt"><div class="card-h"><h3>${L(`Today's energy ledger`, `Bugünün enerji defteri`)}</h3></div><div class="grid g6" id="led" style="font-size:12.5px"></div></div>`;
+    $$("#bm button").forEach((b) => b.onclick = async () => { det = await ctx.api("/enerji/ayar", { mod: b.dataset.m }); this.paint(ctx); ctx.toast(`${L(`Battery mode:`, `Batarya modu:`)} ${b.textContent}`, "ok"); });
     $("#drs").onclick = async () => { det = await ctx.api("/enerji/ayar", { dr_aktif: !det.dr_aktif }); this.paint(ctx); };
     $("#rz").onchange = async (e) => { det = await ctx.api("/enerji/ayar", { rezerv: +e.target.value / 100 }); this.paint(ctx); };
     $("#rz").oninput = (e) => { $("#rzv").textContent = e.target.value + "%"; };
@@ -70,44 +70,44 @@ export default {
     $$("#bm button").forEach((x) => x.classList.toggle("on", x.dataset.m === d.mod));
     $("#drs").classList.toggle("on", d.dr_aktif);
     if (document.activeElement !== $("#rz")) { $("#rz").value = Math.round(d.rezerv * 100); $("#rzv").textContent = Math.round(d.rezerv * 100) + "%"; }
-    $("#drinfo").textContent = d.dr_tesisler.length ? `load shift active at ${d.dr_tesisler.length} sites` : "";
+    $("#drinfo").textContent = d.dr_tesisler.length ? `load shift active at ${d.dr_tesisler.length} ${L(`sites`, `tesiste kaydırma aktif`)}` : "";
     $("#tbar").innerHTML = tariffBar(ctx.live().t);
     if (d.gecmis) {
       const hst = d.gecmis;
       lineChart($("#ech"), { height: 230, unit: "MW", series: [
-        { label: "Load", color: "#e2e8f0", data: hst.map((p) => [p.t, p.yuk]) },
-        { label: "Grid", color: "#a78bfa", data: hst.map((p) => [p.t, p.sebeke]), area: true },
-        { label: "Solar", color: "#fbbf24", data: hst.map((p) => [p.t, p.ges]), area: true },
-        { label: "Biogas", color: "#4ade80", data: hst.map((p) => [p.t, p.bio]) }],
-        refs: [{ y: d.sozlesme / 1000, label: `Contract ${fmt.mw(d.sozlesme, 1)} MW`, color: "#f87171" }] });
+        { label: L("Load", "Yük"), color: "#e2e8f0", data: hst.map((p) => [p.t, p.yuk]) },
+        { label: L("Grid", "Şebeke"), color: "#a78bfa", data: hst.map((p) => [p.t, p.sebeke]), area: true },
+        { label: L("Solar", "GES"), color: "#fbbf24", data: hst.map((p) => [p.t, p.ges]), area: true },
+        { label: L("Biogas", "Biyogaz"), color: "#4ade80", data: hst.map((p) => [p.t, p.bio]) }],
+        refs: [{ y: d.sozlesme / 1000, label: `${L(`Contract`, `Sözleşme`)} ${fmt.mw(d.sozlesme, 1)} MW`, color: "#f87171" }] });
       lineChart($("#sch"), { height: 230, series: [
-        { label: "Battery charge %", color: "#34d399", data: hst.map((p) => [p.t, p.soc * 100]), area: true, unit: "%" },
-        { label: "Electricity price ×10 (₺/kWh)", color: "#f97316", data: hst.map((p) => [p.t, p.fiyat * 10]), unit: "" }], min: 0 });
+        { label: L("Battery charge %", "Batarya doluluk %"), color: "#34d399", data: hst.map((p) => [p.t, p.soc * 100]), area: true, unit: "%" },
+        { label: L("Electricity price ×10 (₺/kWh)", "Elektrik fiyatı ×10 (₺/kWh)"), color: "#f97316", data: hst.map((p) => [p.t, p.fiyat * 10]), unit: "" }], min: 0 });
     }
     $("#tms").innerHTML = d.trafolar.map((t) => {
       const c = t.oran > 1 ? "#f87171" : t.oran > 0.9 ? "#fbbf24" : "#34d399";
-      return `<div class="item"><div class="ttl">⚡ ${t.id}<span class="num" style="margin-left:auto;color:${c};font-size:18px">${Math.round(t.oran * 100)}%</span></div>
+      return `<div class="item"><div class="ttl">⚡ ${t.id}<span class="num" style="margin-left:auto;color:${c};font-size:18px">${fmt.pct(t.oran)}</span></div>
         <div class="mini-bar mt" style="height:8px"><i style="width:${Math.min(100, t.oran * 100)}%;background:${c}"></i></div>
-        <div class="txt mt">${fmt.mw(t.yuk_kw, 1)} / ${fmt.mw(t.kapasite_kw, 1)} MW · ${t.fabrikalar.length} sites</div>
+        <div class="txt mt">${fmt.mw(t.yuk_kw, 1)} / ${fmt.mw(t.kapasite_kw, 1)} MW · ${t.fabrikalar.length} ${L(`sites`, `tesis`)}</div>
         <div class="txt" style="font-size:11.5px">${t.fabrikalar.map((id) => `<a href="javascript:void 0" data-f="${id}">${id}</a>`).join(" · ")}</div></div>`;
     }).join("");
     $$("#tms [data-f]").forEach((a) => a.onclick = () => ctx.openFactory(a.dataset.f));
-    const L = [["Total consumption", fmt.n(b.yuk_kwh / 1000, 1) + " MWh"], ["Solar output", fmt.n(b.ges_kwh / 1000, 1) + " MWh"], ["Bought from grid", fmt.n(b.sebeke_kwh / 1000, 1) + " MWh"],
-      ["Sold to grid", fmt.n(b.ihracat_kwh / 1000, 1) + " MWh"], ["Biogas", fmt.n(b.biyogaz_kwh / 1000, 2) + " MWh"], ["Peak draw", fmt.mw(b.pik_kw, 1) + " MW"],
-      ["Battery charged", fmt.n(b.bess_sarj_kwh / 1000, 1) + " MWh"], ["Battery discharged", fmt.n(b.bess_desarj_kwh / 1000, 1) + " MWh"], ["Contract overrun", fmt.n(b.asim_kwh) + " kWh"],
-      ["Unserved", fmt.n(b.karsilanamayan_kwh) + " kWh"], ["Load-shift events", fmt.n(b.dr_olay)], ["CO₂ avoided", fmt.n(b.kacinilan_co2_kg / 1000, 1) + " t"]];
-    $("#led").innerHTML = L.map(([k, v]) => `<div class="item"><div class="muted">${k}</div><b class="num" style="font-size:15px">${v}</b></div>`).join("");
-    setKpi("e-fat", fmt.ktl(b.fatura_tl), "", `avg. ₺${fmt.n(b.fatura_tl / Math.max(1, b.sebeke_kwh), 2)}/kWh`);
-    setKpi("e-tas", fmt.ktl(b.tasarruf_bess_tl), "", "battery arbitrage + peak shaving");
+    const LED = [[L("Total consumption", "Toplam tüketim"), fmt.n(b.yuk_kwh / 1000, 1) + " MWh"], [L("Solar output", "GES üretimi"), fmt.n(b.ges_kwh / 1000, 1) + " MWh"], [L("Bought from grid", "Şebekeden alım"), fmt.n(b.sebeke_kwh / 1000, 1) + " MWh"],
+      [L("Sold to grid", "Şebekeye satış"), fmt.n(b.ihracat_kwh / 1000, 1) + " MWh"], [L("Biogas", "Biyogaz"), fmt.n(b.biyogaz_kwh / 1000, 2) + " MWh"], [L("Peak draw", "Pik çekiş"), fmt.mw(b.pik_kw, 1) + " MW"],
+      [L("Battery charged", "Batarya şarj"), fmt.n(b.bess_sarj_kwh / 1000, 1) + " MWh"], [L("Battery discharged", "Batarya deşarj"), fmt.n(b.bess_desarj_kwh / 1000, 1) + " MWh"], [L("Contract overrun", "Sözleşme aşımı"), fmt.n(b.asim_kwh) + " kWh"],
+      [L("Unserved", "Karşılanamayan"), fmt.n(b.karsilanamayan_kwh) + " kWh"], [L("Load-shift events", "Talep kaydırma olayı"), fmt.n(b.dr_olay)], [L("CO₂ avoided", "Kaçınılan CO₂"), fmt.n(b.kacinilan_co2_kg / 1000, 1) + " t"]];
+    $("#led").innerHTML = LED.map(([k, v]) => `<div class="item"><div class="muted">${k}</div><b class="num" style="font-size:15px">${v}</b></div>`).join("");
+    setKpi("e-fat", fmt.ktl(b.fatura_tl), "", `${L("avg.", "ort.")} ${fmt.price(b.fatura_tl / Math.max(1, b.sebeke_kwh), 2)}/kWh`);
+    setKpi("e-tas", fmt.ktl(b.tasarruf_bess_tl), "", L("battery arbitrage + peak shaving", "batarya arbitrajı + pik tıraşlama"));
     this._fac = d.tesis_kw;
   },
   update(l, ctx) {
     if (!l) return;
     const e = l.e;
-    setKpi("e-yuk", fmt.mw(e.yuk, 1), "MW", `contract ${fmt.mw(e.sozlesme, 1)} MW`, e.yuk / e.sozlesme);
-    setKpi("e-ges", fmt.mw(e.ges, 1), "MW", `${fmt.mw(ctx.world.ges_kwp, 0)} MWp · capacity factor ${fmt.pct(e.ges / ctx.world.ges_kwp)}`, e.ges / ctx.world.ges_kwp);
-    setKpi("e-seb", fmt.mw(e.sebeke, 1), "MW", l.kesinti ? `<span class="t-crit">GRID DOWN</span>` : e.sebeke > e.sozlesme ? `<span class="t-crit">contract overrun</span>` : `${fmt.pct(e.sebeke / e.sozlesme)} of contract`, e.sebeke / e.sozlesme);
-    setKpi("e-bes", Math.round(e.soc * 100) + "%", "", e.bess > 50 ? `▼ discharging ${fmt.mw(e.bess, 1)} MW` : e.bess < -50 ? `▲ charging ${fmt.mw(-e.bess, 1)} MW` : "standby", e.soc);
+    setKpi("e-yuk", fmt.mw(e.yuk, 1), "MW", `${L(`contract`, `sözleşme`)} ${fmt.mw(e.sozlesme, 1)} MW`, e.yuk / e.sozlesme);
+    setKpi("e-ges", fmt.mw(e.ges, 1), "MW", `${fmt.mw(ctx.world.ges_kwp, 0)} ${L(`MWp · capacity factor`, `MWp · kapasite faktörü`)} ${fmt.pct(e.ges / ctx.world.ges_kwp)}`, e.ges / ctx.world.ges_kwp);
+    setKpi("e-seb", fmt.mw(e.sebeke, 1), "MW", l.kesinti ? `<span class="t-crit">${L(`GRID DOWN`, `ŞEBEKE KESİK`)}</span>` : e.sebeke > e.sozlesme ? `<span class="t-crit">${L(`contract overrun`, `sözleşme aşımı`)}</span>` : `${fmt.pct(e.sebeke / e.sozlesme)} ${L("of contract", "sözleşmenin")}`, e.sebeke / e.sozlesme);
+    setKpi("e-bes", Math.round(e.soc * 100) + "%", "", e.bess > 50 ? `${L(`▼ discharging`, `▼ deşarj`)} ${fmt.mw(e.bess, 1)} MW` : e.bess < -50 ? `${L(`▲ charging`, `▲ şarj`)} ${fmt.mw(-e.bess, 1)} MW` : L("standby", "beklemede"), e.soc);
     const now = performance.now();
     if (!this._ft || now - this._ft > 900) { this._ft = now; $("#flw").innerHTML = flowSvg(e, this._fac || 600); }
   },
@@ -115,10 +115,10 @@ export default {
     this.h2 = h;
     $("#h2s").classList.toggle("on", h.aktif);
     const b = h.bugun, T = h.toplam;
-    $("#h2g").innerHTML = [["Dedicated solar", `${fmt.mw(h.pv, 2)} MW`], ["Electrolyser", `${fmt.mw(h.ely_yuk, 2)} / ${fmt.mw(h.ely_kw, 0)} MW`], ["Store", `${fmt.n(h.stok)} / ${fmt.n(h.kapasite_kg)} kg`],
-      ["Production", `${fmt.n(h.uretim, 1)} kg/h`], ["To furnaces", `${fmt.n(h.kullanim, 1)} kg/h · ${Math.round(h.oran * 100)}%`], ["H₂ today", `${fmt.n(b.uretim_kg)} kg`],
-      ["Gas replaced today", `${fmt.n(b.gaz_ikame_m3)} m³`], ["Avoided today", `${fmt.n(b.kacinilan_co2_kg / 1000, 2)} tCO₂`], ["Saved today", fmt.ktl(b.tasarruf_tl)],
-      ["Total H₂", `${fmt.n(T.uretim_kg)} kg`], ["Total avoided", `${fmt.n(T.kacinilan_co2_kg / 1000, 1)} tCO₂`], ["Total saved", fmt.ktl(T.tasarruf_tl)]]
+    $("#h2g").innerHTML = [[L("Dedicated solar", "Özel GES"), `${fmt.mw(h.pv, 2)} MW`], [L("Electrolyser", "Elektrolizör"), `${fmt.mw(h.ely_yuk, 2)} / ${fmt.mw(h.ely_kw, 0)} MW`], [L("Store", "Depo"), `${fmt.n(h.stok)} / ${fmt.n(h.kapasite_kg)} kg`],
+      [L("Production", "Üretim"), `${fmt.n(h.uretim, 1)} ${L(`kg/h`, `kg/sa`)}`], [L("To furnaces", "Fırınlara"), `${fmt.n(h.kullanim, 1)} ${L(`kg/h`, `kg/sa`)} · ${fmt.pct(h.oran)}`], [L("H₂ today", "Bugün H₂"), `${fmt.n(b.uretim_kg)} kg`],
+      [L("Gas replaced today", "Bugün gaz ikamesi"), `${fmt.n(b.gaz_ikame_m3)} m³`], [L("Avoided today", "Bugün kaçınılan"), `${fmt.n(b.kacinilan_co2_kg / 1000, 2)} tCO₂`], [L("Saved today", "Bugün tasarruf"), fmt.ktl(b.tasarruf_tl)],
+      [L("Total H₂", "Toplam H₂"), `${fmt.n(T.uretim_kg)} kg`], [L("Total avoided", "Toplam kaçınılan"), `${fmt.n(T.kacinilan_co2_kg / 1000, 1)} tCO₂`], [L("Total saved", "Toplam tasarruf"), fmt.ktl(T.tasarruf_tl)]]
       .map(([k, v]) => `<div class="item"><div class="muted">${k}</div><b class="num" style="font-size:14px">${v}</b></div>`).join("");
   },
   unmount() { det = null; this._ft = 0; },

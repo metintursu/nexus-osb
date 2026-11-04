@@ -276,3 +276,8 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
 .ztick .item { display: flex; gap: 10px; align-items: center; font-size: 13px; overflow: hidden; }
 .ztick .item span.txt2 { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 #zset .inp { width: 100%; min-width: 0; }
+
+/* ---------- language switch ---------- */
+.lang-row { margin-top: 6px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.lang-seg button { padding: 2px 8px; font-size: 11px; }
+.lang-wait { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; background: rgba(4, 8, 16, .82); backdrop-filter: blur(4px); text-align: center; font-size: 15px; }

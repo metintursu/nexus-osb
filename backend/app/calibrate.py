@@ -2,6 +2,7 @@
 
 A site's electricity (kWh or kW), output, natural gas and water records (hourly, daily or monthly) are uploaded;
 the simulated installed power, 24-hour load profile, output rate and gas/water coefficients are fitted to them."""
+from .i18n import L, LANG, TN
 from statistics import median
 
 from . import tabular
@@ -25,7 +26,7 @@ def analyze(rows, f):
     c_gz = _col(heads, "dogalgaz", "gaz", "gas", "sm3", avoid=("su_",))
     c_su = next((h for h in heads if h == "su" or h.startswith("su_") or "water" in h), None)
     if not (c_kwh or c_kw):
-        raise ValueError("No electricity column found: a column named 'kwh' (consumption) or 'kw' (power) is required")
+        raise ValueError(L("No electricity column found: a column named 'kwh' (consumption) or 'kw' (power) is required", "Elektrik sütunu bulunamadı: 'kwh' (tüketim) veya 'kw' (güç) adlı bir sütun gerekli"))
     data = []
     for d, r in zip(ts, rows):
         if d is None:
@@ -36,7 +37,7 @@ def analyze(rows, f):
         data.append((d, e, tabular.num(r.get(c_pr)) if c_pr else None, tabular.num(r.get(c_gz)) if c_gz else None,
                      tabular.num(r.get(c_su)) if c_su else None))
     if not data:
-        raise ValueError("No readable data rows (check the date and electricity values)")
+        raise ValueError(L("No readable data rows (check the date and electricity values)", "Okunabilir veri satırı yok (tarih ve elektrik değerlerini kontrol et)"))
     data.sort(key=lambda x: x[0])
     gaps = [(b[0] - a[0]).total_seconds() / 3600 for a, b in zip(data, data[1:]) if b[0] > a[0]]
     step = median(gaps) if gaps else 24 * 30
@@ -63,7 +64,7 @@ def analyze(rows, f):
             rows_h.append((key, kw, p, g, s))
             kw_by.setdefault(key.hour, []).append(kw)
         if len(rows_h) < 24:
-            warn.append("Less than 24 hours of data; missing hours of the profile were filled from neighbouring hours")
+            warn.append(L("Less than 24 hours of data; missing hours of the profile were filled from neighbouring hours", "24 saatten az veri var; profil eksik saatlerde komşu saatlerle dolduruldu"))
         allkw = sorted(x[1] for x in rows_h)
         peak = allkw[int(len(allkw) * 0.95) - 1] if len(allkw) > 1 else allkw[0]
         rated = max(10.0, peak / 0.93)
@@ -104,7 +105,7 @@ def analyze(rows, f):
             new["gaz_k"] = round(sum(gases) / len(gases) / per / (f.calisan * L * 24), 4)
         if waters:
             new["su_k"] = round(sum(waters) / len(waters) / per / (f.calisan * (0.3 + 0.7 * L) * 24), 4)
-        warn.append(f"{'Daily' if mode == 'gunluk' else 'Monthly'} data: no hourly profile can be derived, the site's shift model is kept")
+        warn.append(L(f"{'Daily' if mode == 'gunluk' else 'Monthly'} data: no hourly profile can be derived, the site's shift model is kept", f"{'Günlük' if mode == 'gunluk' else 'Aylık'} veri: saatlik profil çıkarılamaz, tesisin vardiya modeli korunur"))
         summ = {"ort_kw": round(avg_kw), "pik_kw": None, "gunluk_kwh": round(avg_kw * 24), "aylik_kwh": round(avg_kw * 24 * 30),
                 "aktif_saat_gunde": hrs}
     if c_pr:
@@ -112,7 +113,7 @@ def analyze(rows, f):
         summ["toplam_uretim"] = round(sum(prs), 1)
     change = new["kurulu_kw"] / max(1, before["kurulu_kw"])
     if change > 3 or change < 0.33:
-        warn.append(f"Installed power changes {change:.1f}x versus the model — check the units (kWh / MWh, kW / W)")
+        warn.append(L(f"Installed power changes {change:.1f}x versus the model — check the units (kWh / MWh, kW / W)", f"Kurulu güç modele göre {TN(change, 1)} kat değişiyor — birimleri (kWh / MWh, kW / W) kontrol et"))
     return {"fabrika": f.id, "fabrika_ad": f.ad, "mod": mode, "satir": len(data),
             "aralik": f"{data[0][0]:%d.%m.%Y %H:%M} – {data[-1][0]:%d.%m.%Y %H:%M}",
             "sutunlar": {"zaman": tc, "saat": sc, "elektrik": c_kwh or c_kw, "elektrik_tur": "kWh" if c_kwh else "kW",

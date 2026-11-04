@@ -5,21 +5,23 @@ Agents negotiate with each other using Zone Credits:
   · Waste bargaining — producer and buyer converge on a symbiosis price through mutual concessions.
   · Truck sharing — two half-full shipments to the same gate are merged into one truck.
 Messages are spread over simulated minutes so they flow "live"; the outcome is really applied to the simulation."""
+from ..i18n import L, LANG
 from .data import WASTE
 from . import geo
 
 TRAITS = {
-    "tutumlu":   {"ad": "Thrifty",   "taviz": 0.07, "fiyat": 1.22},
-    "uzlasmaci": {"ad": "Cooperative", "taviz": 0.16, "fiyat": 1.00},
-    "yesil":     {"ad": "Green",     "taviz": 0.20, "fiyat": 0.92},
-    "aceleci":   {"ad": "Hasty",     "taviz": 0.24, "fiyat": 1.08},
+    "tutumlu":   {"ad": L("Thrifty", "Tutumlu"),   "taviz": 0.07, "fiyat": 1.22},
+    "uzlasmaci": {"ad": L("Cooperative", "Uzlaşmacı"), "taviz": 0.16, "fiyat": 1.00},
+    "yesil":     {"ad": L("Green", "Yeşil"),     "taviz": 0.20, "fiyat": 0.92},
+    "aceleci":   {"ad": L("Hasty", "Aceleci"),     "taviz": 0.24, "fiyat": 1.08},
 }
 CEIL = 4200      # flexibility price cap ₺/MWh
 
 
 def n(x, d=0):
-    """Number format: 12,345.6"""
-    return f"{x:,.{d}f}"
+    """Number format for the current language: 12,345.6 (en) / 12.345,6 (tr)"""
+    s = f"{x:,.{d}f}"
+    return s.replace(",", "X").replace(".", ",").replace("X", ".") if LANG == "tr" else s
 
 
 class Agents:
@@ -54,9 +56,9 @@ class Agents:
 
     def _name(self, kim):
         if kim == "osb":
-            return "Zone Management"
+            return L("Zone Management", "OSB Yönetimi")
         if kim == "beyin":
-            return "Zone Brain"
+            return L("Zone Brain", "Bölge Beyni")
         return self.w.fmap[kim].ad
 
     def _pay(self, frm, to, amt, why):
@@ -111,9 +113,10 @@ class Agents:
         cand = cand[:7]
         if len(cand) < 2:
             return
-        r = self._room("esneklik", f"{n(need/1000, 1)} MW flexibility auction", ["osb"] + [f.id for f in cand])
-        self._say(r, 0, "osb", f"⚡ Flexibility auction open: I need {n(need/1000, 1)} MW of load reduction for the next 60 min. "
-                               f"Cap ₺{n(CEIL)}/MWh, paid in Zone Credits. {worst['id']} is at {n(worst['oran']*100)}% right now.", "cagri")
+        r = self._room("esneklik", L(f"{n(need/1000, 1)} MW flexibility auction", f"{n(need/1000, 1)} MW esneklik ihalesi"), ["osb"] + [f.id for f in cand])
+        self._say(r, 0, "osb", L(f"⚡ Flexibility auction open: I need {n(need/1000, 1)} MW of load reduction for the next 60 min. "
+                               f"Cap ₺{n(CEIL)}/MWh, paid in Zone Credits. {worst['id']} is at {n(worst['oran']*100)}% right now.", f"⚡ Esneklik ihalesi açıldı: önümüzdeki 60 dk için {n(need/1000, 1)} MW yük azaltımı arıyorum. "
+                               f"Tavan {n(CEIL)} ₺/MWh, ödeme OSB Kredisi ile. {worst['id']} şu an %{n(worst['oran']*100)}."), "cagri")
         bids = []
         for i, f in enumerate(cand):
             tr = TRAITS[self.trait[f.id]]
@@ -121,10 +124,10 @@ class Agents:
             price = round(1900 * tr["fiyat"] * rng.uniform(0.85, 1.25) / 50) * 50
             bids.append([f, kw, price])
             line = rng.choice([
-                f"I can give {n(kw/1000, 2)} MW at ₺{n(price)}/MWh.",
-                f"I'll shift compressors and pre-heating: {n(kw/1000, 2)} MW, my price is ₺{n(price)}/MWh.",
-                f"I can slow the line for half an hour. For {n(kw/1000, 2)} MW I want ₺{n(price)}/MWh.",
-                f"{n(kw/1000, 2)} MW from us. I won't go below ₺{n(price)}/MWh.",
+                L(f"I can give {n(kw/1000, 2)} MW at ₺{n(price)}/MWh.", f"{n(kw/1000, 2)} MW verebilirim, {n(price)} ₺/MWh."),
+                L(f"I'll shift compressors and pre-heating: {n(kw/1000, 2)} MW, my price is ₺{n(price)}/MWh.", f"Kompresörleri ve ön ısıtmayı kaydırırım: {n(kw/1000, 2)} MW, fiyatım {n(price)} ₺/MWh."),
+                L(f"I can slow the line for half an hour. For {n(kw/1000, 2)} MW I want ₺{n(price)}/MWh.", f"Hattı yarım saat yavaşlatabilirim. {n(kw/1000, 2)} MW için {n(price)} ₺/MWh istiyorum."),
+                L(f"{n(kw/1000, 2)} MW from us. I won't go below ₺{n(price)}/MWh.", f"Bizden {n(kw/1000, 2)} MW. {n(price)} ₺/MWh altına inmem."),
             ])
             self._say(r, 1 + i, f.id, line, "teklif")
         over = [b for b in bids if b[2] > CEIL]
@@ -132,13 +135,13 @@ class Agents:
         for b in over[:2]:
             f = b[0]
             tr = TRAITS[self.trait[f.id]]
-            self._say(r, t, "osb", f"{f.ad}, your bid is above the cap. Will you come down to ₺{n(CEIL)}/MWh?", "karsi")
+            self._say(r, t, "osb", L(f"{f.ad}, your bid is above the cap. Will you come down to ₺{n(CEIL)}/MWh?", f"{f.ad}, teklifin tavanın üstünde. {n(CEIL)} ₺/MWh'e iner misin?"), "karsi")
             if tr["taviz"] >= 0.15:
                 b[2] = CEIL
-                self._say(r, t + 1, f.id, f"OK, ₺{n(CEIL)}/MWh accepted.", "kabul")
+                self._say(r, t + 1, f.id, L(f"OK, ₺{n(CEIL)}/MWh accepted.", f"Tamam, {n(CEIL)} ₺/MWh kabul."), "kabul")
             else:
                 b[2] = 10 ** 9
-                self._say(r, t + 1, f.id, "I can't risk my production at that price, count me out.", "red")
+                self._say(r, t + 1, f.id, L("I can't risk my production at that price, count me out.", "Bu fiyata üretimimi riske atamam, ben yokum."), "red")
             t += 2
 
         def clear(room):
@@ -155,16 +158,17 @@ class Agents:
                 return
             for f, kw, price in win:
                 f.dr, f.dr_until = f.s["esnek"], w.minute + 60
-                self._pay("osb", f.id, kw / 1000 * price, "Flexibility auction")
+                self._pay("osb", f.id, kw / 1000 * price, L("Flexibility auction", "Esneklik ihalesi"))
             e.today["dr_olay"] += 1
             mwh = got / 1000
             self.stats["esneklik_mwh"] += mwh
             avg = sum(p * k for _, k, p in win) / got
             room["sonuc"] = {"ok": True, "mw": round(mwh, 2), "ort_fiyat": round(avg), "kazanan": [f.ad for f, _, _ in win]}
-            self.msgs.append({"t": w.minute, "oda": room["id"], "tur": "esneklik", "kim": "osb", "ad": "Zone Management", "tip": "sonuc", "kisilik": None,
-                              "metin": f"✅ Auction closed: {len(win)} sites, {n(mwh, 2)} MW in total, average ₺{n(avg)}/MWh. "
-                                       f"Winners: {', '.join(f.ad for f, _, _ in win)}. Load shifting has started."})
-            w.log("muzakere", f"Flexibility auction: {len(win)} sites {n(mwh, 1)} MW")
+            self.msgs.append({"t": w.minute, "oda": room["id"], "tur": "esneklik", "kim": "osb", "ad": L("Zone Management", "OSB Yönetimi"), "tip": "sonuc", "kisilik": None,
+                              "metin": L(f"✅ Auction closed: {len(win)} sites, {n(mwh, 2)} MW in total, average ₺{n(avg)}/MWh. "
+                                       f"Winners: {', '.join(f.ad for f, _, _ in win)}. Load shifting has started.", f"✅ İhale kapandı: {len(win)} tesis, toplam {n(mwh, 2)} MW, ortalama {n(avg)} ₺/MWh. "
+                                       f"Kazananlar: {', '.join(f.ad for f, _, _ in win)}. Yük kaydırma başladı.")})
+            w.log("muzakere", L(f"Flexibility auction: {len(win)} sites {n(mwh, 1)} MW", f"Esneklik ihalesi: {len(win)} tesis {n(mwh, 1)} MW"))
         self._say(r, t + 1, "osb", "", "sonuc", clear)
 
     # ------------------------------------------------------------ waste bargaining
@@ -186,11 +190,11 @@ class Agents:
         r = self._room("atik", f"{o['atik_ad']}: {P.ad} → {C.ad}", [P.id, C.id])
         r["veri"]["opp"] = o["id"]
         self._say(r, 0, P.id, rng.choice([
-            f"I produce about {n(o['aylik_miktar'])} {unit} of {o['atik_ad'].lower()} a month. Rather than paying for disposal, I can sell it to you: ₺{n(ask)}/{unit}.",
-            f"My {o['atik_ad'].lower()} stock keeps piling up. I'm {o['mesafe_km']} km away and can supply you regularly at ₺{n(ask)}/{unit}."]), "teklif")
+            L(f"I produce about {n(o['aylik_miktar'])} {unit} of {o['atik_ad'].lower()} a month. Rather than paying for disposal, I can sell it to you: ₺{n(ask)}/{unit}.", f"Ayda yaklaşık {n(o['aylik_miktar'])} {unit} {o['atik_ad'].lower()} çıkarıyorum. Bertarafa göndermek yerine sana satabilirim: {n(ask)} ₺/{unit}."),
+            L(f"My {o['atik_ad'].lower()} stock keeps piling up. I'm {o['mesafe_km']} km away and can supply you regularly at ₺{n(ask)}/{unit}.", f"{o['atik_ad']} stoklarım birikiyor. {o['mesafe_km']} km uzağındayım, {n(ask)} ₺/{unit} fiyatla düzenli tedarik ederim.")]), "teklif")
         self._say(r, 2, C.id, rng.choice([
-            f"It works for me as raw material, but {n(ask)} is too much. I can offer ₺{n(bid)}/{unit}.",
-            f"Interested. I have pre-processing costs, so ₺{n(bid)}/{unit} would be fair."]), "karsi")
+            L(f"It works for me as raw material, but {n(ask)} is too much. I can offer ₺{n(bid)}/{unit}.", f"Hammadde olarak işime yarar ama {n(ask)} fazla. {n(bid)} ₺/{unit} verebilirim."),
+            L(f"Interested. I have pre-processing costs, so ₺{n(bid)}/{unit} would be fair.", f"İlgiliyim. Ön işlem maliyetim var, {n(bid)} ₺/{unit} makul olur.")]), "karsi")
         t, ok = 4, False
         for rnd in range(5):
             gap = ask - bid
@@ -200,17 +204,17 @@ class Agents:
             ask -= gap * tp["taviz"]
             bid += gap * tc["taviz"]
             if rnd % 2 == 0:
-                self._say(r, t, P.id, f"₺{n(ask)}/{unit}. I'll organise the transport.", "karsi")
+                self._say(r, t, P.id, L(f"₺{n(ask)}/{unit}. I'll organise the transport.", f"{n(ask)} ₺/{unit}. Taşımayı ben organize ederim."), "karsi")
             else:
-                self._say(r, t, C.id, f"I can go up to ₺{n(bid)}/{unit} with an annual contract.", "karsi")
+                self._say(r, t, C.id, L(f"I can go up to ₺{n(bid)}/{unit} with an annual contract.", f"{n(bid)} ₺/{unit}'e çıkabilirim, yıllık sözleşme olursa."), "karsi")
             t += 2
         price = (ask + bid) / 2
         if not ok:
-            self._say(r, t, C.id, "We can't agree this round, the price gap is too wide. Let's talk again next month.", "red")
-            self._say(r, t + 1, "beyin", f"Note: the price gap is {n((ask-bid)/ask*100)}%. The disposal fee (₺1,150/t) is a loss for both sides.", "bilgi",
+            self._say(r, t, C.id, L("We can't agree this round, the price gap is too wide. Let's talk again next month.", "Bu turda anlaşamıyoruz, fiyat farkı fazla. Gelecek ay tekrar konuşalım."), "red")
+            self._say(r, t + 1, "beyin", L(f"Note: the price gap is {n((ask-bid)/ask*100)}%. The disposal fee (₺1,150/t) is a loss for both sides.", f"Not: fiyat farkı %{n((ask-bid)/ask*100)}. Bertaraf bedeli ({1150} ₺/t) iki taraf için de kayıp."), "bilgi",
                       lambda room: room.update(sonuc={"ok": False}))
             return
-        self._say(r, t, P.id, f"Deal: ₺{n(price)}/{unit}.", "kabul")
+        self._say(r, t, P.id, L(f"Deal: ₺{n(price)}/{unit}.", f"Anlaştık: {n(price)} ₺/{unit}."), "kabul")
 
         def seal(room):
             room["sonuc"] = {"ok": True, "fiyat": round(price), "birim": unit, "opp": o["id"], "onay": False,
@@ -221,14 +225,14 @@ class Agents:
                     link["fiyat"] = round(price)
                     w.symbiosis.compute_opps()
                     room["sonuc"]["onay"] = True
-                    text = f"🤝 Contract signed and link {link['lid']} is live. ≈₺{n(price*o['aylik_miktar'])} of trade per month."
+                    text = L(f"🤝 Contract signed and link {link['lid']} is live. ≈₺{n(price*o['aylik_miktar'])} of trade per month.", f"🤝 Sözleşme imzalandı ve bağlantı {link['lid']} devreye alındı. Aylık ≈{n(price*o['aylik_miktar'])} ₺ ticaret.")
                 else:
-                    text = "The opportunity is no longer valid."
+                    text = L("The opportunity is no longer valid.", "Fırsat artık geçerli değil.")
             else:
-                text = f"🤝 The parties agreed on ₺{n(price)}/{unit}. Awaiting zone approval (approve it in the Negotiation Room)."
-            self.msgs.append({"t": w.minute, "oda": room["id"], "tur": "atik", "kim": "osb", "ad": "Zone Management", "tip": "sonuc", "kisilik": None, "metin": text})
-            w.log("muzakere", f"Waste deal: {o['atik_ad']} {P.ad} → {C.ad} @ ₺{n(price)}/{unit}")
-        self._say(r, t + 1, C.id, rng.choice(["Accepted, let's sign.", "Done, we have a deal."]), "kabul", seal)
+                text = L(f"🤝 The parties agreed on ₺{n(price)}/{unit}. Awaiting zone approval (approve it in the Negotiation Room).", f"🤝 Taraflar {n(price)} ₺/{unit}'de uzlaştı. OSB onayı bekleniyor (Müzakere Odası'ndan onayla).")
+            self.msgs.append({"t": w.minute, "oda": room["id"], "tur": "atik", "kim": "osb", "ad": L("Zone Management", "OSB Yönetimi"), "tip": "sonuc", "kisilik": None, "metin": text})
+            w.log("muzakere", L(f"Waste deal: {o['atik_ad']} {P.ad} → {C.ad} @ ₺{n(price)}/{unit}", f"Atık pazarlığı: {o['atik_ad']} {P.ad} → {C.ad} @ {n(price)} ₺/{unit}"))
+        self._say(r, t + 1, C.id, rng.choice([L("Accepted, let's sign.", "Kabul, imzalayalım."), L("Done, we have a deal.", "Tamamdır, el sıkıştık.")]), "kabul", seal)
 
     def approve(self, room_id):
         r = next((x for x in self.rooms if x["id"] == room_id), None)
@@ -239,8 +243,8 @@ class Agents:
             link["fiyat"] = r["sonuc"]["fiyat"]
             r["sonuc"]["onay"] = True
             self.w.symbiosis.compute_opps()
-            self.msgs.append({"t": self.w.minute, "oda": r["id"], "tur": "atik", "kim": "osb", "ad": "Zone Management", "tip": "sonuc", "kisilik": None,
-                              "metin": f"✅ Approved by the zone, link {link['lid']} is live."})
+            self.msgs.append({"t": self.w.minute, "oda": r["id"], "tur": "atik", "kim": "osb", "ad": L("Zone Management", "OSB Yönetimi"), "tip": "sonuc", "kisilik": None,
+                              "metin": L(f"✅ Approved by the zone, link {link['lid']} is live.", f"✅ OSB onayladı, bağlantı {link['lid']} devrede.")})
         return link
 
     # ------------------------------------------------------------ truck sharing
@@ -254,9 +258,9 @@ class Agents:
                     A, B = w.fmap[a.src[1]], w.fmap[b.src[1]]
                     km = geo.manhattan((A.cx, A.cy), (B.cx, B.cy)) * geo.UNIT_KM
                     gate = geo.GATES[a.dst[1]]["ad"]
-                    r = self._room("kamyon", f"Load pooling · {gate}", [A.id, B.id])
-                    self._say(r, 0, A.id, f"I have a {n(a.yuk, 1)} t shipment to {gate}; the truck will leave half empty. Anyone want to share it?", "cagri")
-                    self._say(r, 1, B.id, f"We have {n(b.yuk, 1)} t for the same gate, {n(km, 1)} km away. Pick us up first and let's combine.", "teklif")
+                    r = self._room("kamyon", L(f"Load pooling · {gate}", f"Yük birleştirme · {gate}"), [A.id, B.id])
+                    self._say(r, 0, A.id, L(f"I have a {n(a.yuk, 1)} t shipment to {gate}; the truck will leave half empty. Anyone want to share it?", f"{gate} yönüne {n(a.yuk, 1)} t sevkiyatım var, kamyon yarı boş gidecek. Yükü paylaşan var mı?"), "cagri")
+                    self._say(r, 1, B.id, L(f"We have {n(b.yuk, 1)} t for the same gate, {n(km, 1)} km away. Pick us up first and let's combine.", f"Bizde de aynı kapıya {n(b.yuk, 1)} t var, {n(km, 1)} km uzağındayım. Önce bizden alsın, birleştirelim."), "teklif")
 
                     def merge(room, a=a, b=b, A=A, B=B):
                         if a.durum == "bekliyor" and b.durum == "bekliyor" and b in w.logistics.orders:
@@ -264,13 +268,13 @@ class Agents:
                             a.urun = f"{a.urun} + {b.urun}"
                             w.logistics.orders.remove(b)
                             self.stats["birlesen_sefer"] += 1
-                            self._pay(B.id, A.id, 650, "Truck sharing")
+                            self._pay(B.id, A.id, 650, L("Truck sharing", "Kamyon paylaşımı"))
                             room["sonuc"] = {"ok": True}
-                            self.msgs.append({"t": w.minute, "oda": room["id"], "tur": "kamyon", "kim": "osb", "ad": "Zone Management", "tip": "sonuc", "kisilik": None,
-                                              "metin": f"✅ Two shipments merged into one truck ({n(a.yuk, 1)} t). One trip saved, ≈{n(km*2+6)} km and fuel."})
+                            self.msgs.append({"t": w.minute, "oda": room["id"], "tur": "kamyon", "kim": "osb", "ad": L("Zone Management", "OSB Yönetimi"), "tip": "sonuc", "kisilik": None,
+                                              "metin": L(f"✅ Two shipments merged into one truck ({n(a.yuk, 1)} t). One trip saved, ≈{n(km*2+6)} km and fuel.", f"✅ İki sevkiyat tek kamyonda birleşti ({n(a.yuk, 1)} t). Bir sefer, ≈{n(km*2+6)} km ve yakıt tasarrufu.")})
                         else:
                             room["sonuc"] = {"ok": False}
-                    self._say(r, 2, A.id, "Deal, just pay the sharing fee in credits.", "kabul", merge)
+                    self._say(r, 2, A.id, L("Deal, just pay the sharing fee in credits.", "Anlaştık, paylaşım bedelini krediyle öde yeter."), "kabul", merge)
                     return
 
     # ------------------------------------------------------------ output

@@ -1,4 +1,5 @@
 """NEXUS OSB world model — runs every subsystem together on each simulated minute."""
+from ..i18n import L, LANG, TN
 import math
 import random
 
@@ -28,7 +29,7 @@ class World:
     def __init__(self, seed=42, logger=None, cfg=None):
         self.cfg = cfg or {}
         geo.configure(self.cfg)
-        self.name = self.cfg.get("ad") or "NEXUS Demo Zone"
+        self.name = self.cfg.get("ad") or L("NEXUS Demo Zone", "NEXUS Demo OSB")
         self.rng = random.Random(seed)
         self.minute = 0
         self.logger = logger
@@ -62,8 +63,8 @@ class World:
         self.insights = []
         self.symbiosis.compute_opps()
         # start with the three best links already running
-        for pick in (lambda o: o["tasima"] == "pipeline", lambda o: o["atik"] == "organik",
-                     lambda o: o["tasima"] == "truck"):
+        for pick in (lambda o: o["tasima"] == L("pipeline", "boru hattı"), lambda o: o["atik"] == "organik",
+                     lambda o: o["tasima"] == L("truck", "kamyon")):
             cand = [o for o in self.symbiosis.opps if pick(o)]
             if cand:
                 self.symbiosis.approve(cand[0]["id"])
@@ -74,7 +75,7 @@ class World:
         rng = self.rng
         parcels = geo.parcels()
         hq = parcels.pop(0)                    # Block 1-1, first parcel: zone management + fire station
-        self.hq = {"ad": "Zone Management · Fire Station · Emergency Centre", **hq}
+        self.hq = {"ad": L("Zone Management · Fire Station · Emergency Centre", "OSB Yönetim · İtfaiye · Acil Durum Merkezi"), **hq}
         hcx, hcy = hq["x"] + hq["w"] / 2, hq["y"] + hq["h"] / 2
         self.hq_seg = geo.access_segment(hcx, hcy, hq["c"], hq["r"])
         fac = geo.facilities()["aritma"]
@@ -103,7 +104,7 @@ class World:
                 lo, hi = SECTORS[sek]["calisan"]
                 emp = int(t.get("calisan") or (int(rng.randint(lo, hi) / 10) * 10))
                 vard = int(t.get("vardiya") or rng.choice(SECTORS[sek]["vardiya"]))
-                ad = (t.get("ad") or f"Site {i+1}").strip()[:40]
+                ad = (t.get("ad") or L(f"Site {i+1}", f"Tesis {i+1}")).strip()[:40]
                 self.factories.append(Factory(f"F{i+1:02d}", ad, sek, p, max(10, emp), max(1, min(3, vard)), rng))
             used = {(f.parcel["c"], f.parcel["r"], f.parcel["slot"]) for f in self.factories}
             parcels = [p for p in rest if (p["c"], p["r"], p["slot"]) not in used]
@@ -124,7 +125,7 @@ class World:
                 emp = int(rng.randint(lo, hi) / 10) * 10
                 ad = f"{names[i % len(names)]} {NAME_SUFFIX[s]}"
                 self.factories.append(Factory(f"F{i+1:02d}", ad, s, p, emp, rng.choice(SECTORS[s]["vardiya"]), rng))
-            bio = Factory(f"F{len(self.factories)+1:02d}", "Zone Biogas Plant", "biyogaz", bio_parcel, 25, 3, rng)
+            bio = Factory(f"F{len(self.factories)+1:02d}", L("Zone Biogas Plant", "OSB Biyogaz Tesisi"), "biyogaz", bio_parcel, 25, 3, rng)
             self.factories.append(bio)
         doks = [f for f in self.factories if f.sektor in ("dokum", "metal")] or self.factories
         self.h2_parcel = None
@@ -211,7 +212,7 @@ class World:
             return self.fmap[key].ad
         if kind == "g":
             return geo.GATES[key]["ad"]
-        return "Logistics Hub"
+        return L("Logistics Hub", "Lojistik Merkezi")
 
     def export_cfg(self):
         """Exports the current zone as a config dict the Zone Designer can read."""
@@ -230,17 +231,17 @@ class World:
     def start_scenario(self, key):
         if key not in SCENARIOS:
             return None
-        self.stop_scenario("New scenario started")
+        self.stop_scenario(L("New scenario started", "Yeni senaryo başlatıldı"))
         sc = SCENARIOS[key]
         self.scenario = {"key": key, "ad": sc["ad"], "baslangic": self.minute, "bitis": self.minute + sc["sure"]}
         m = self.mods
         if key == "sebeke_kesintisi":
             self.outage = True
-            self.incidents.raise_once("kesinti", "enerji", "National grid supply lost", "kritik",
-                                      detay="No voltage at the main substation; island mode active",
-                                      aksiyonlar=["Critical loads (food cold chain, chemicals, wastewater) running on solar + battery",
-                                                  "Controlled-stop order sent to non-critical sites",
-                                                  "Ask the grid operator for an estimated restoration time"])
+            self.incidents.raise_once("kesinti", "enerji", L("National grid supply lost", "Ulusal şebeke beslemesi kesildi"), "kritik",
+                                      detay=L("No voltage at the main substation; island mode active", "Ana İndirici Merkez girişinde gerilim yok; ada modu devrede"),
+                                      aksiyonlar=[L("Critical loads (food cold chain, chemicals, wastewater) running on solar + battery", "Kritik yükler (gıda soğuk zincir, kimya, arıtma) GES+batarya ile besleniyor"),
+                                                  L("Controlled-stop order sent to non-critical sites", "Kritik olmayan tesislere kontrollü duruş talimatı gönderildi"),
+                                                  L("Ask the grid operator for an estimated restoration time", "Dağıtım şirketinden tahmini dönüş süresi iste")])
         elif key == "enerji_zammi":
             m["fiyat"] = 1.4
         elif key == "dogalgaz_kisinti":
@@ -257,10 +258,10 @@ class World:
             afet.start_quake(self)
         elif key == "kimyasal_sizinti":
             afet.start_leak(self)
-        self.log("senaryo", f"Scenario started: {sc['ad']}")
+        self.log("senaryo", L(f"Scenario started: {sc['ad']}", f"Senaryo başladı: {sc['ad']}"))
         return self.scenario
 
-    def stop_scenario(self, why="Scenario time is up"):
+    def stop_scenario(self, why=L("Scenario time is up", "Senaryo süresi doldu")):
         if not self.scenario:
             return
         key = self.scenario["key"]
@@ -268,8 +269,8 @@ class World:
         self.mods = {k: (dict(v) if isinstance(v, dict) else v) for k, v in DEFAULT_MODS.items()}
         if key == "sebeke_kesintisi":
             self.outage = False
-            self.incidents.resolve_key("kesinti", "Grid supply restored")
-            self.incidents.resolve_key("karsilanamayan", "Grid supply restored")
+            self.incidents.resolve_key("kesinti", L("Grid supply restored", "Şebeke beslemesi geri geldi"))
+            self.incidents.resolve_key("karsilanamayan", L("Grid supply restored", "Şebeke beslemesi geri geldi"))
         if key == "liman_grevi":
             self.logistics.gate_blocked[self._port_gate()] = False
         if key in ("deprem", "kimyasal_sizinti"):
@@ -334,7 +335,7 @@ class World:
             del self.days[0]
         if self.on_day:
             self.on_day(summary)
-        self.log("rapor", f"Day {summary['gun']} closed · {summary['enerji_mwh']} MWh · {summary['co2_t']} tCO2 · health {summary['saglik']}")
+        self.log("rapor", L(f"Day {summary['gun']} closed · {summary['enerji_mwh']} MWh · {summary['co2_t']} tCO2 · health {summary['saglik']}", f"Gün {summary['gun']} kapandı · {summary['enerji_mwh']} MWh · {summary['co2_t']} tCO2 · sağlık {summary['saglik']}"))
         for f in self.factories:
             f.reset_day()
         self.energy.reset_day()
@@ -373,7 +374,7 @@ class World:
                 "anlik_th": round(sum(f.co2_kgh for f in fs) / 1000, 2), "sebeke_yogunluk": self.grid_co2,
                 "fabrikalar": rows, "baz_gun_t": base, "gunluk": hist,
                 "skdm_toplam_eur": sk, "skdm_toplam_tl": round(sk * EUR_TL), "ab_fiyat": EU_CO2_EUR,
-                "hedef_2030": "-30% (vs. baseline day)"}
+                "hedef_2030": L("-30% (vs. baseline day)", "-%30 (baz güne göre)")}
 
     # ------------------------------------------------------------------ skorlar
     def health(self):
@@ -438,50 +439,52 @@ class World:
         e, lg, sy, wt = self.energy, self.logistics, self.symbiosis, self.water
         worst = max(e.tms, key=lambda t: t["oran"])
         if worst["oran"] > 0.93:
-            out.append({"seviye": "uyari", "modul": "enerji", "baslik": f"{worst['id']} near its limit: {worst['oran']*100:.0f}%",
-                        "metin": f"The {len(worst['fabrikalar'])} sites on {worst['id']} draw {worst['yuk_kw']/1000:.1f} MW. "
-                                 "Shifting flexible loads by 30–60 min prevents an overload event.",
-                        "aksiyon": {"tip": "dr", "etiket": "Start load shifting"}})
+            out.append({"seviye": "uyari", "modul": "enerji", "baslik": L(f"{worst['id']} near its limit: {worst['oran']*100:.0f}%", f"{worst['id']} sınırda: %{TN(worst['oran']*100, 0)}"),
+                        "metin": L(f"The {len(worst['fabrikalar'])} sites on {worst['id']} draw {worst['yuk_kw']/1000:.1f} MW. "
+                                 "Shifting flexible loads by 30–60 min prevents an overload event.", f"{worst['id']} trafosuna bağlı {len(worst['fabrikalar'])} tesis {TN(worst['yuk_kw']/1000, 1)} MW çekiyor. "
+                                 "Esnek yüklerin 30–60 dk kaydırılması aşırı yük olayını önler."),
+                        "aksiyon": {"tip": "dr", "etiket": L("Start load shifting", "Talep kaydırmayı başlat")}})
         if e.mode == "kapali":
-            out.append({"seviye": "uyari", "modul": "enerji", "baslik": "Battery disabled",
-                        "metin": "With the BESS off, the whole peak-hour load comes from the grid. Auto mode saves the peak price gap every day.",
-                        "aksiyon": {"tip": "bess", "etiket": "Set battery to auto"}})
+            out.append({"seviye": "uyari", "modul": "enerji", "baslik": L("Battery disabled", "Batarya devre dışı"),
+                        "metin": L("With the BESS off, the whole peak-hour load comes from the grid. Auto mode saves the peak price gap every day.", "BESS kapalıyken puant saatlerinde tüm yük şebekeden çekiliyor. Otomatik moda almak günde puant farkı kadar kazandırır."),
+                        "aksiyon": {"tip": "bess", "etiket": L("Set battery to auto", "Bataryayı otomatiğe al")}})
         if self.period == "gunduz" and e.solar_kw > 2000 and e.soc / e.bess_kwh < 0.55:
-            out.append({"seviye": "bilgi", "modul": "enerji", "baslik": "Prepare for the peak",
-                        "metin": f"Battery at {e.soc/e.bess_kwh*100:.0f}%. Charging it with surplus solar before the 17:00 peak band is recommended."})
+            out.append({"seviye": "bilgi", "modul": "enerji", "baslik": L("Prepare for the peak", "Puanta hazırlık"),
+                        "metin": L(f"Battery at {e.soc/e.bess_kwh*100:.0f}%. Charging it with surplus solar before the 17:00 peak band is recommended.", f"Batarya %{TN(e.soc/e.bess_kwh*100, 0)}. 17:00 puant dilimi öncesinde GES fazlasıyla doldurulması önerilir.")})
         er = lg.empty_ratio()
         if not lg.pool and er > 0.3:
-            out.append({"seviye": "uyari", "modul": "lojistik", "baslik": f"{er*100:.0f}% of truck km are driven empty",
-                        "metin": "Trucks return to the depot after every delivery. With the shared fleet pool, they take the nearest next job instead; empty km, fuel and CO2 drop.",
-                        "aksiyon": {"tip": "havuz", "etiket": "Open shared fleet pool"}})
+            out.append({"seviye": "uyari", "modul": "lojistik", "baslik": L(f"{er*100:.0f}% of truck km are driven empty", f"Kamyonların %{TN(er*100, 0)}'i boş dolaşıyor"),
+                        "metin": L("Trucks return to the depot after every delivery. With the shared fleet pool, they take the nearest next job instead; empty km, fuel and CO2 drop.", "Her teslimattan sonra araçlar depoya dönüyor. Ortak filo havuzu açılırsa araçlar en yakın yeni işe geçer; boş km, yakıt ve CO2 düşer."),
+                        "aksiyon": {"tip": "havuz", "etiket": L("Open shared fleet pool", "Ortak filo havuzunu aç")}})
         if sy.opps:
             o = sy.opps[0]
-            out.append({"seviye": "firsat", "modul": "simbiyoz", "baslik": f"{o['atik_ad']}: ≈₺{o['aylik_kazanc_tl']/1000:,.0f}k per month",
-                        "metin": f"{o['ureten_ad']} → {o['alan_ad']} ({o['mesafe_km']} km, {o['tasima']}). "
-                                 f"{o['aylik_miktar']} {o['birim']} reused per month, {o['aylik_co2_t']} tCO2 avoided.",
-                        "aksiyon": {"tip": "simbiyoz", "id": o["id"], "etiket": "Approve link"}})
+            out.append({"seviye": "firsat", "modul": "simbiyoz", "baslik": L(f"{o['atik_ad']}: ≈₺{o['aylik_kazanc_tl']/1000:,.0f}k per month", f"{o['atik_ad']}: ayda ≈{TN(o['aylik_kazanc_tl']/1000, 0)} bin TL"),
+                        "metin": L(f"{o['ureten_ad']} → {o['alan_ad']} ({o['mesafe_km']} km, {o['tasima']}). "
+                                 f"{o['aylik_miktar']} {o['birim']} reused per month, {o['aylik_co2_t']} tCO2 avoided.", f"{o['ureten_ad']} → {o['alan_ad']} ({o['mesafe_km']} km, {o['tasima']}). "
+                                 f"Aylık {o['aylik_miktar']} {o['birim']} yeniden kullanım, {o['aylik_co2_t']} tCO2 kaçınım."),
+                        "aksiyon": {"tip": "simbiyoz", "id": o["id"], "etiket": L("Approve link", "Bağlantıyı onayla")}})
         if wt.util > 0.97 or wt.koi_out > 220:
-            out.append({"seviye": "uyari", "modul": "su", "baslik": f"Wastewater plant at {wt.util*100:.0f}%",
-                        "metin": f"Outlet COD {wt.koi_out:.0f} mg/L. Food/chemical discharges should be diverted to the equalisation basin."})
+            out.append({"seviye": "uyari", "modul": "su", "baslik": L(f"Wastewater plant at {wt.util*100:.0f}%", f"Arıtma yüklenmesi %{TN(wt.util*100, 0)}"),
+                        "metin": L(f"Outlet COD {wt.koi_out:.0f} mg/L. Food/chemical discharges should be diverted to the equalisation basin.", f"Çıkış KOİ {TN(wt.koi_out, 0)} mg/L. Gıda/kimya tesislerinin deşarjı dengeleme havuzuna kaydırılmalı.")})
         if wt.reuse < 0.2:
-            out.append({"seviye": "firsat", "modul": "su", "baslik": "Water reuse can be increased",
-                        "metin": f"Reuse is at {wt.reuse*100:.0f}%. Raising it to 25% saves ≈{wt.inflow*24*0.15:,.0f} m³ of fresh water per day.",
-                        "aksiyon": {"tip": "su", "etiket": "Set reuse to 25%"}})
+            out.append({"seviye": "firsat", "modul": "su", "baslik": L("Water reuse can be increased", "Su geri kazanımı artırılabilir"),
+                        "metin": L(f"Reuse is at {wt.reuse*100:.0f}%. Raising it to 25% saves ≈{wt.inflow*24*0.15:,.0f} m³ of fresh water per day.", f"Geri kazanım %{TN(wt.reuse*100, 0)}. %25'e çıkarılırsa günde ≈{TN(wt.inflow*24*0.15, 0)} m³ temiz su tasarrufu."),
+                        "aksiyon": {"tip": "su", "etiket": L("Set reuse to 25%", "Geri kazanımı %25 yap")}})
         m = self.market.matches()
         if m:
             x = m[0]
-            out.append({"seviye": "firsat", "modul": "pazaryeri", "baslik": f"Capacity match: {x['kaynak']}",
-                        "metin": f"Idle capacity at {x['veren_ad']} covers {x['isteyen_ad']}'s request · {x['miktar']} {x['birim']} · estimated saving ₺{x['tasarruf_tl']:,}",
-                        "aksiyon": {"tip": "pazar", "teklif": x["teklif"], "talep": x["talep"], "etiket": "Create contract"}})
+            out.append({"seviye": "firsat", "modul": "pazaryeri", "baslik": L(f"Capacity match: {x['kaynak']}", f"Kapasite eşleşmesi: {x['kaynak']}"),
+                        "metin": L(f"Idle capacity at {x['veren_ad']} covers {x['isteyen_ad']}'s request · {x['miktar']} {x['birim']} · estimated saving ₺{x['tasarruf_tl']:,}", f"{x['veren_ad']} atıl kapasitesi {x['isteyen_ad']} talebini karşılıyor · {x['miktar']} {x['birim']} · tahmini tasarruf {x['tasarruf_tl']:,} TL"),
+                        "aksiyon": {"tip": "pazar", "teklif": x["teklif"], "talep": x["talep"], "etiket": L("Create contract", "Sözleşmeyi kur")}})
         low = sorted([f for f in self.factories if f.status == "calisiyor" and f.sektor != "biyogaz"], key=lambda f: f.oee)[:1]
         for f in low:
             if f.oee < 0.7:
-                out.append({"seviye": "bilgi", "modul": "fabrika", "baslik": f"{f.ad}: OEE {f.oee*100:.0f}%",
-                            "metin": "Lowest equipment effectiveness in the zone. Review downtime causes with the Digital Master records.",
+                out.append({"seviye": "bilgi", "modul": "fabrika", "baslik": L(f"{f.ad}: OEE {f.oee*100:.0f}%", f"{f.ad}: OEE %{TN(f.oee*100, 0)}"),
+                            "metin": L("Lowest equipment effectiveness in the zone. Review downtime causes with the Digital Master records.", "Bölgedeki en düşük ekipman etkinliği. Dijital Usta kayıtlarıyla duruş nedenleri incelenmeli."),
                             "fabrika": f.id})
         crb = sorted(self.factories, key=lambda f: -f.co2_kgh)[0]
-        out.append({"seviye": "bilgi", "modul": "karbon", "baslik": f"Highest current emissions: {crb.ad}",
-                    "metin": f"{crb.co2_kgh/1000:.1f} tCO2/hour. {'Covered by EU CBAM — carbon cost risk on exports.' if crb.s['skdm'] else 'Waste-heat recovery and electrification are the top candidates.'}",
+        out.append({"seviye": "bilgi", "modul": "karbon", "baslik": L(f"Highest current emissions: {crb.ad}", f"En yüksek anlık emisyon: {crb.ad}"),
+                    "metin": L(f"{crb.co2_kgh/1000:.1f} tCO2/hour. {'Covered by EU CBAM — carbon cost risk on exports.' if crb.s['skdm'] else 'Waste-heat recovery and electrification are the top candidates.'}", f"{TN(crb.co2_kgh/1000, 1)} tCO2/saat. {'SKDM kapsamında — ihracatta karbon bedeli riski var.' if crb.s['skdm'] else 'Atık ısı geri kazanımı ve elektrifikasyon öncelikli adaylar.'}"),
                     "fabrika": crb.id})
         return out
 
@@ -493,7 +496,7 @@ class World:
                 "bos_parseller": self.empty_parcels, "fabrikalar": [f.static() for f in self.factories],
                 "sektorler": {k: {"ad": v["ad"], "renk": v["renk"], "kisa": v["kisa"]} for k, v in SECTORS.items()},
                 "atiklar": WASTE, "senaryolar": SCENARIOS, "sozlesme_kw": self.energy.contract_kw,
-                "hidrojen": {"ad": "Hydrogen Valley · electrolyser + 12 MWp solar", **self.h2_parcel} if self.h2_parcel else None,
+                "hidrojen": {"ad": L("Hydrogen Valley · electrolyser + 12 MWp solar", "Hidrojen Vadisi · elektrolizör + 12 MWp GES"), **self.h2_parcel} if self.h2_parcel else None,
                 "bolge_ad": self.name, "ges_kwp": self.energy.ges_kwp, "bess_kwh": self.energy.bess_kwh,
                 "ustalar": [{"id": m["id"], "ad": m["ad"]} for m in self.masters.items], "filo": len(self.logistics.trucks)}
 
@@ -524,20 +527,20 @@ class World:
         k = self.kpis()
         e = self.energy
         h = self.health()
-        lines = [f"Time: day {self.day} {self.clock()} · tariff band {dict(gece='night', gunduz='day', puant='peak')[self.period]} ({self.tariff:.2f} TRY/kWh)",
-                 f"Zone health score {h['skor']}/100 · sub-scores {h['parcalar']} (enerji=energy, lojistik=logistics, dongusel=circularity, guvenlik=safety, su=water, verimlilik=efficiency)",
-                 f"Load {k['guc_mw']} MW, solar {k['ges_mw']} MW, grid {k['sebeke_mw']} MW, battery {k['soc']*100:.0f}%, contract {e.contract_kw/1000:.1f} MW",
-                 "Substations: " + ", ".join(f"{t['id']} {t['oran']*100:.0f}%" for t in e.tms),
-                 f"Today: energy {k['enerji_mwh']} MWh, bill {k['fatura_tl']:,} TRY, CO2 {k['co2_t']} t, revenue {k['ciro_tl']:,} TRY, CO2 avoided {k['kacinilan_t']} t",
-                 f"Logistics: {k['kamyon']} active trucks, empty-km share {self.logistics.empty_ratio()*100:.0f}%, shared pool {'on' if self.logistics.pool else 'off'}",
-                 f"Wastewater: {self.water.inflow:.0f} m3/h, load {self.water.util*100:.0f}%, outlet COD {self.water.koi_out:.0f} mg/L, reuse {self.water.reuse*100:.0f}%",
-                 f"Symbiosis: {sum(1 for l in self.symbiosis.links if l['aktif'])} active links, total gain {self.symbiosis.total['kazanc_tl']:,.0f} TRY",
-                 f"Scenario: {self.scenario['ad'] if self.scenario else 'none'}" + (f" · disaster: {self.disaster['tip']}" if self.disaster else ""),
-                 f"Autopilot: {'on' if self.autopilot.enabled else 'off'} ({self.autopilot.stats['karar']} decisions) · agent deals {self.agents.stats['anlasma']}",
-                 f"Hydrogen: store {self.hydrogen.store_kg:.0f} kg, foundry/metal gas substitution {self.hydrogen.frac*100:.0f}%",
-                 f"Technician pool: {sum(1 for m in self.masters.items if m['durum'] == 'musait')}/{len(self.masters.items)} available, downtime saved {self.masters.total['kazanilan_dk']:.0f} min",
-                 "Open incidents: " + ("; ".join(f"[{i['seviye']}] {i['baslik']} {i['fabrika_ad'] or ''}" for i in self.incidents.open()[:8]) or "none"),
-                 "Plants (name, sector, status, kW, OEE, tCO2/h): " + "; ".join(
-                     f"{f.ad} ({f.s['kisa']}, {STATUS_EN.get(f.status, f.status)}, {f.power_kw:.0f}, {f.oee*100:.0f}%, {f.co2_kgh/1000:.2f})" for f in self.factories),
-                 "Key insights: " + " | ".join(i["baslik"] for i in self.insights[:6])]
+        lines = [L(f"Time: day {self.day} {self.clock()} · tariff band {dict(gece='night', gunduz='day', puant='peak')[self.period]} ({self.tariff:.2f} TRY/kWh)", f"Zaman: Gün {self.day} {self.clock()} · tarife dilimi {self.period} ({TN(self.tariff, 2)} TL/kWh)"),
+                 L(f"Zone health score {h['skor']}/100 · sub-scores {h['parcalar']} (enerji=energy, lojistik=logistics, dongusel=circularity, guvenlik=safety, su=water, verimlilik=efficiency)", f"Bölge sağlık skoru {h['skor']}/100 · alt skorlar {h['parcalar']}"),
+                 L(f"Load {k['guc_mw']} MW, solar {k['ges_mw']} MW, grid {k['sebeke_mw']} MW, battery {k['soc']*100:.0f}%, contract {e.contract_kw/1000:.1f} MW", f"Yük {k['guc_mw']} MW, GES {k['ges_mw']} MW, şebeke {k['sebeke_mw']} MW, batarya %{TN(k['soc']*100, 0)}, sözleşme {TN(e.contract_kw/1000, 1)} MW"),
+                 L("Substations: ", "Trafolar: ") + ", ".join(L(f"{t['id']} {t['oran']*100:.0f}%", f"{t['id']} %{TN(t['oran']*100, 0)}") for t in e.tms),
+                 L(f"Today: energy {k['enerji_mwh']} MWh, bill {k['fatura_tl']:,} TRY, CO2 {k['co2_t']} t, revenue {k['ciro_tl']:,} TRY, CO2 avoided {k['kacinilan_t']} t", f"Bugün: enerji {k['enerji_mwh']} MWh, fatura {k['fatura_tl']:,} TL, CO2 {k['co2_t']} t, ciro {k['ciro_tl']:,} TL, kaçınılan CO2 {k['kacinilan_t']} t"),
+                 L(f"Logistics: {k['kamyon']} active trucks, empty-km share {self.logistics.empty_ratio()*100:.0f}%, shared pool {'on' if self.logistics.pool else 'off'}", f"Lojistik: {k['kamyon']} aktif kamyon, boş km oranı %{TN(self.logistics.empty_ratio()*100, 0)}, ortak havuz {'açık' if self.logistics.pool else 'kapalı'}"),
+                 L(f"Wastewater: {self.water.inflow:.0f} m3/h, load {self.water.util*100:.0f}%, outlet COD {self.water.koi_out:.0f} mg/L, reuse {self.water.reuse*100:.0f}%", f"Arıtma: {TN(self.water.inflow, 0)} m3/h, yüklenme %{TN(self.water.util*100, 0)}, çıkış KOİ {TN(self.water.koi_out, 0)} mg/L, geri kazanım %{TN(self.water.reuse*100, 0)}"),
+                 L(f"Symbiosis: {sum(1 for l in self.symbiosis.links if l['aktif'])} active links, total gain {self.symbiosis.total['kazanc_tl']:,.0f} TRY", f"Simbiyoz: {sum(1 for l in self.symbiosis.links if l['aktif'])} aktif bağlantı, toplam kazanç {TN(self.symbiosis.total['kazanc_tl'], 0)} TL"),
+                 L(f"Scenario: {self.scenario['ad'] if self.scenario else 'none'}", f"Senaryo: {self.scenario['ad'] if self.scenario else 'yok'}") + (L(f" · disaster: {self.disaster['tip']}", f" · afet: {self.disaster['tip']}") if self.disaster else ""),
+                 L(f"Autopilot: {'on' if self.autopilot.enabled else 'off'} ({self.autopilot.stats['karar']} decisions) · agent deals {self.agents.stats['anlasma']}", f"Otopilot: {'açık' if self.autopilot.enabled else 'kapalı'} ({self.autopilot.stats['karar']} karar) · ajan anlaşması {self.agents.stats['anlasma']}"),
+                 L(f"Hydrogen: store {self.hydrogen.store_kg:.0f} kg, foundry/metal gas substitution {self.hydrogen.frac*100:.0f}%", f"Hidrojen: depo {TN(self.hydrogen.store_kg, 0)} kg, döküm/metal gaz ikamesi %{TN(self.hydrogen.frac*100, 0)}"),
+                 L(f"Technician pool: {sum(1 for m in self.masters.items if m['durum'] == 'musait')}/{len(self.masters.items)} available, downtime saved {self.masters.total['kazanilan_dk']:.0f} min", f"Usta havuzu: {sum(1 for m in self.masters.items if m['durum'] == 'musait')}/{len(self.masters.items)} müsait, kazanılan duruş {TN(self.masters.total['kazanilan_dk'], 0)} dk"),
+                 L("Open incidents: ", "Açık olaylar: ") + ("; ".join(f"[{i['seviye']}] {i['baslik']} {i['fabrika_ad'] or ''}" for i in self.incidents.open()[:8]) or L("none", "yok")),
+                 L("Plants (name, sector, status, kW, OEE, tCO2/h): ", "Fabrikalar (ad, sektör, durum, kW, OEE, tCO2/h): ") + "; ".join(
+                     L(f"{f.ad} ({f.s['kisa']}, {STATUS_EN.get(f.status, f.status)}, {f.power_kw:.0f}, {f.oee*100:.0f}%, {f.co2_kgh/1000:.2f})", f"{f.ad} ({f.s['kisa']}, {f.status}, {TN(f.power_kw, 0)}, {TN(f.oee*100, 0)}%, {TN(f.co2_kgh/1000, 2)})") for f in self.factories),
+                 L("Key insights: ", "Öne çıkan içgörüler: ") + " | ".join(i["baslik"] for i in self.insights[:6])]
         return "\n".join(lines)

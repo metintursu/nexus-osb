@@ -2,6 +2,7 @@
 
 Each bridge: URL + target site + field mapping (dotted path: "machines.0.power_kw") + multiplier + status mapping.
 The wizard first probes the URL and lists every leaf field; the user picks which one is power, status, OEE and output."""
+from .i18n import L, LANG
 import time
 import uuid
 
@@ -136,9 +137,9 @@ class Bridges:
                     r.raise_for_status()
                     vals = self.convert(b, r.json())
                     if not any(k in vals for k in FIELDS):
-                        raise ValueError("None of the mapped fields were found in the response")
+                        raise ValueError(L("None of the mapped fields were found in the response", "Eşlenen alanlardan hiçbiri yanıtta bulunamadı"))
                     if not apply(b["fabrika"], vals):
-                        raise ValueError(f"NEXUS site not found: {b['fabrika']}")
+                        raise ValueError(L(f"NEXUS site not found: {b['fabrika']}", f"NEXUS tesisi bulunamadı: {b['fabrika']}"))
                     b.update(durum="ok", hata=None, son=time.strftime("%H:%M:%S"), son_deger=vals, mesaj=b["mesaj"] + 1)
                 except Exception as e:  # noqa: BLE001
                     b.update(durum="hata", hata=f"{type(e).__name__}: {str(e)[:160]}")

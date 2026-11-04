@@ -13,6 +13,10 @@ proves the outcome of different policies in **parallel universes**.
 
 ![Command Center](docs/screenshots/command-center.png)
 
+**Languages:** English and Turkish. Switch with the **EN / TR** buttons at the bottom of the sidebar; every screen,
+agent conversation, autopilot decision, incident, Zone Brain reply and the presentation tour follow the chosen
+language (the zone restarts in a few seconds when you switch).
+
 > **Note:** NEXUS OSB is a simulation. The 30 sites and all figures are simulated assumptions. As real data is
 > connected (electricity price, weather, live site data, historical records), measurements replace the model.
 > "OSB" is short for *Organize Sanayi Bölgesi*, Turkish for "organized industrial zone".
@@ -157,7 +161,8 @@ MQTT (Mosquitto in the compose file, port 1883): subscribe `nexus/fabrika/{id}/t
 Swagger: http://localhost:8080/docs
 
 > The API paths and JSON field names keep their original Turkish identifiers (`/api/enerji`, `durum`, `uretim_dk`…)
-> so existing integrations keep working. Every screen, message and AI reply is in English.
+> so existing integrations keep working in both languages. `GET /api/dil` returns the active language,
+> `POST /api/dil {"dil": "tr"}` switches it.
 
 ---
 
@@ -171,6 +176,7 @@ nexus-osb/
    ├─ Dockerfile · requirements.txt · tests/test_sim.py (16 tests)
    └─ app/
       ├─ main.py        FastAPI · WebSocket · MQTT · forecast/universe jobs
+      ├─ i18n.py        Language (en / tr): L(english, turkish) picks the active text
       ├─ ai.py          Zone Brain: Ollama + local analyst + command executor
       ├─ store.py       SQLite event and day log
       ├─ realdata.py    EPİAŞ price + Open-Meteo + persistent settings
@@ -192,7 +198,7 @@ python -m pytest -q
 ```
 
 Environment variables: `EPIAS_KULLANICI`, `EPIAS_SIFRE`, `OLLAMA_URL`, `OLLAMA_MODEL`, `MQTT_HOST`, `MQTT_PORT`,
-`NEXUS_SEED`, `NEXUS_PREWARM_MIN`, `DATA_DIR`.
+`NEXUS_SEED`, `NEXUS_PREWARM_MIN`, `DATA_DIR`, `NEXUS_LANG` (`en` or `tr`, default language until one is chosen in the UI).
 
 ---
 

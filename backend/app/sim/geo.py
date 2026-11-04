@@ -2,11 +2,12 @@
 
 Map coordinates: 1 unit = 10 m (default zone ≈ 10 km x 6.9 km).
 """
+from ..i18n import L, LANG
 import heapq
 import math
 
 UNIT_KM = 0.01
-GATE_NAMES = {"dogu": "East Gate · Motorway", "bati": "West Gate · Port road", "kuzey": "North Gate", "guney": "South Gate"}
+GATE_NAMES = {"dogu": L("East Gate · Motorway", "Doğu Kapısı · Otoyol"), "bati": L("West Gate · Port road", "Batı Kapısı · Liman yolu"), "kuzey": L("North Gate", "Kuzey Kapısı"), "guney": L("South Gate", "Güney Kapısı")}
 CFG = {}
 W, H, XS, YS, GATES, SUBSTATIONS, RESERVED_BLOCKS = 0, 0, [], [], {}, [], {}
 COLS, ROWS = 4, 3
@@ -77,11 +78,11 @@ def facilities():
     ex, ey, ew, eh = block_rect(*inv["enerji"])
     hx, hy, hw, hh = block_rect(*inv["hizmet"])
     return {
-        "ges": {"ad": "Zone Solar Farm (PV)", "x": ex, "y": ey, "w": ew, "h": eh * 0.66},
-        "bess": {"ad": "Battery Storage (BESS)", "x": ex, "y": ey + eh * 0.7, "w": ew * 0.48, "h": eh * 0.3},
-        "aim": {"ad": "Main Substation", "x": ex + ew * 0.52, "y": ey + eh * 0.7, "w": ew * 0.48, "h": eh * 0.3},
-        "aritma": {"ad": "Central Wastewater Plant", "x": hx, "y": hy, "w": hw * 0.48, "h": hh},
-        "lojistik": {"ad": "Logistics Hub · Shared Fleet", "x": hx + hw * 0.52, "y": hy, "w": hw * 0.48, "h": hh},
+        "ges": {"ad": L("Zone Solar Farm (PV)", "OSB Güneş Santrali (GES)"), "x": ex, "y": ey, "w": ew, "h": eh * 0.66},
+        "bess": {"ad": L("Battery Storage (BESS)", "Batarya Depolama (BESS)"), "x": ex, "y": ey + eh * 0.7, "w": ew * 0.48, "h": eh * 0.3},
+        "aim": {"ad": L("Main Substation", "Ana İndirici Merkez"), "x": ex + ew * 0.52, "y": ey + eh * 0.7, "w": ew * 0.48, "h": eh * 0.3},
+        "aritma": {"ad": L("Central Wastewater Plant", "Merkezi Atıksu Arıtma"), "x": hx, "y": hy, "w": hw * 0.48, "h": hh},
+        "lojistik": {"ad": L("Logistics Hub · Shared Fleet", "Lojistik Merkezi · Ortak Filo"), "x": hx + hw * 0.52, "y": hy, "w": hw * 0.48, "h": hh},
     }
 
 

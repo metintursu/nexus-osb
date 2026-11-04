@@ -11,11 +11,13 @@ karbon defteri, kapasite pazaryeri ve kriz merkezi canlı olarak birlikte çalı
 **otopilotta** yönetir, tesis ajanları birbirleriyle **pazarlık eder**, sistem kendi kopyalarını ileri sararak
 **geleceği tahmin eder** ve farklı kararların sonucunu **paralel evrenlerde** kanıtlar.
 
-> **v2.2 notu:** Arayüz, sistem mesajları, ajan konuşmaları, Bölge Beyni yanıtları ve sunum turu artık
-> **İngilizce**. Bölge Beyni Türkçe komutları da anlamaya devam eder (`TM-3'ü rahatlat`, `otopilotu aç`…).
-> API yolları ve JSON alan adları (`/api/enerji`, `durum`, `uretim_dk`…) değişmedi; mevcut bağlantılar çalışır.
+> **Dil seçeneği (v2.3):** Sol menünün en altındaki **EN / TR** düğmesiyle dil değişir. Bütün ekranlar, fabrika
+> ajanlarının konuşmaları, otopilot kararları, olaylar, Bölge Beyni yanıtları ve sunum turu seçilen dile geçer
+> (geçişte bölge birkaç saniyede yeniden kurulur). İlk açılış İngilizcedir; seçimin kalıcıdır.
 
-![Komuta Merkezi](docs/screenshots/command-center.png)
+![Komuta Merkezi](docs/screenshots/tr-komuta-merkezi.png)
+
+![Müzakere Odası](docs/screenshots/tr-muzakere-odasi.png)
 
 ---
 
@@ -38,9 +40,9 @@ Start-Process http://localhost:8080
 
 Durdurmak için `docker compose down` · Kayıtları da silmek için `docker compose down -v`.
 
-**İlk deneme:** üst çubuktaki **▶ Presentation Mode** (Sunum Modu) düğmesine bas. Sistem 15 adımda kendini anlatır:
+**İlk deneme:** üst çubuktaki **▶ Sunum Modu** düğmesine bas. Sistem 15 adımda kendini anlatır:
 otopilotu açar, paralel evrenleri koşturur, bir deprem canlandırır ve sonunda her şeyi eski hâline getirir.
-**🔊 Voice** ile sesli anlatım açılır.
+**🔊 Ses** ile sesli anlatım açılır.
 
 ### Bölge Beyni için Ollama (isteğe bağlı, ücretsiz, yerel)
 
@@ -55,7 +57,7 @@ NEXUS, bilgisayarındaki Ollama'yı `host.docker.internal:11434` üzerinden otom
 
 ## Ekranlar (22)
 
-| Bölüm | Ekran (arayüzdeki adı) | Öne çıkan |
+| Bölüm | Ekran (İngilizce adı) | Öne çıkan |
 |---|---|---|
 | Operasyon | **Komuta Merkezi** (Command Center) | Sağlık skoru, 8 canlı gösterge, harita, otopilot ve ajan şeridi |
 | | **Canlı Harita** (Live Map) | 4 katman + araç, usta, simbiyoz, H₂ hattı, trafo, olay, deprem dalgası, gaz bulutu |
@@ -67,7 +69,7 @@ NEXUS, bilgisayarındaki Ollama'yı `host.docker.internal:11434` üzerinden otom
 | | **Lojistik & Filo** (Logistics & Fleet) | Ortak filo havuzu, kapılar, siparişler |
 | | **Su & Arıtma** (Water & Treatment) | KOİ, kapasite, geri kazanım |
 | Döngüsel ekonomi | **Endüstriyel Simbiyoz** (Industrial Symbiosis) | Fırsat motoru, bağlantılar |
-| | **Müzakere Odası** (Negotiation Room) | Esneklik ihalesi, atık pazarlığı, kamyon paylaşımı · OSB Kredisi (Zone Credits) |
+| | **Müzakere Odası** (Negotiation Room) | Esneklik ihalesi, atık pazarlığı, kamyon paylaşımı · OSB Kredisi |
 | | **Karbon Merkezi** (Carbon Center) | Kapsam 1/2/lojistik, kaçınılan emisyon, AB SKDM (CBAM) yükü |
 | | **Kapasite Pazaryeri** (Capacity Marketplace) | Atıl kapasite eşleşmeleri |
 | Zekâ | **Otopilot** (Autopilot) | 10 kural, gerekçeli karar günlüğü, büyük yatırımlar için insan onayı |

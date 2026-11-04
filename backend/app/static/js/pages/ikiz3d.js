@@ -11,9 +11,9 @@ export default {
   mount(root, ctx) {
     const W = ctx.world;
     root.innerHTML = `<div class="three-wrap" id="tw" style="height:${Math.max(560, window.innerHeight - 130)}px">
-      <div class="three-hud"><div class="seg"><button id="b-drone">🚁 Drone tour</button><button id="b-smoke" class="on">Smoke</button><button id="b-flow" class="on">Flows</button><button id="b-reset">Reset camera</button></div></div>
+      <div class="three-hud"><div class="seg"><button id="b-drone">${L(`🚁 Drone tour`, `🚁 Drone turu`)}</button><button id="b-smoke" class="on">${L(`Smoke`, `Duman`)}</button><button id="b-flow" class="on">${L(`Flows`, `Akışlar`)}</button><button id="b-reset">${L(`Reset camera`, `Kamerayı sıfırla`)}</button></div></div>
       <div class="three-info" id="tinfo"></div><div class="map-tip" id="ttip"></div></div>
-      <div class="muted" style="font-size:12px;margin-top:8px">Drag: rotate · Right-click / Shift + drag: pan · Wheel: zoom · Click a building: site details. Building height follows installed power, stack smoke follows current emissions, roof colour shows status.</div>`;
+      <div class="muted" style="font-size:12px;margin-top:8px">${L(`Drag: rotate · Right-click / Shift + drag: pan · Wheel: zoom · Click a building: site details. Building height follows installed power, stack smoke follows current emissions, roof colour shows status.`, `Sürükle: döndür · Sağ tık / Shift + sürükle: kaydır · Tekerlek: yakınlaş · Binaya tıkla: tesis ayrıntısı. Bina yüksekliği kurulu güçle, baca dumanı anlık emisyonla, çatı rengi durumla orantılıdır.`)}</div>`;
     const wrap = $("#tw");
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
@@ -169,9 +169,9 @@ export default {
       if (!id) { tip.style.display = "none"; el.style.cursor = "grab"; return; }
       el.style.cursor = "pointer";
       const f = fobj[id].f, lf = (ctx.live().f || []).find((x) => x.id === id) || {};
-      tip.innerHTML = `<b>${esc(f.ad)}</b><div class="muted" style="font-size:11.5px">${esc(f.sektor_ad)} · ${f.calisan} employees</div>
-        <div class="kv"><span>Status</span><span style="color:${STATUS_COLOR[lf.d]}">${STATUS[lf.d] || "—"}</span><span>Power</span><span class="num">${fmt.mw(lf.kw, 2)} MW</span>
-        <span>OEE</span><span class="num">${fmt.pct(lf.oee)}</span><span>Emissions</span><span class="num">${fmt.n((lf.co2 || 0) / 1000, 2)} t/h</span></div>`;
+      tip.innerHTML = `<b>${esc(f.ad)}</b><div class="muted" style="font-size:11.5px">${esc(f.sektor_ad)} · ${f.calisan} ${L(`employees`, `çalışan`)}</div>
+        <div class="kv"><span>${L(`Status`, `Durum`)}</span><span style="color:${STATUS_COLOR[lf.d]}">${STATUS[lf.d] || "—"}</span><span>${L(`Power`, `Güç`)}</span><span class="num">${fmt.mw(lf.kw, 2)} MW</span>
+        <span>OEE</span><span class="num">${fmt.pct(lf.oee)}</span><span>${L(`Emissions`, `Emisyon`)}</span><span class="num">${fmt.n((lf.co2 || 0) / 1000, 2)} t/h</span></div>`;
       const r = wrap.getBoundingClientRect();
       tip.style.display = "block";
       tip.style.left = Math.min(e.clientX - r.left + 14, r.width - 230) + "px";
@@ -289,10 +289,10 @@ export default {
       }
       if (l.afet) disasterG.children.forEach((m) => {
         if (m.userData.cone) {
-          const L = Math.max(1, l.afet.uzunluk), Wd = Math.max(1, l.afet.genislik);
-          m.scale.set(18, L, Wd); m.rotation.set(0, 0, 0);
+          const LEN = Math.max(1, l.afet.uzunluk), Wd = Math.max(1, l.afet.genislik);
+          m.scale.set(18, LEN, Wd); m.rotation.set(0, 0, 0);
           m.rotation.z = Math.PI / 2; m.rotation.y = -l.afet.yon;
-          m.position.set(l.afet.x + Math.cos(l.afet.yon) * L / 2, 14, l.afet.y + Math.sin(l.afet.yon) * L / 2);
+          m.position.set(l.afet.x + Math.cos(l.afet.yon) * LEN / 2, 14, l.afet.y + Math.sin(l.afet.yon) * LEN / 2);
         } else {
           const ph = (now / 2200 + m.userData.k) % 1; const s = 20 + ph * 700; m.scale.set(s, s, 1); m.material.opacity = (1 - ph) * 0.6;
         }
@@ -305,13 +305,13 @@ export default {
   },
   info(l) {
     const el = $("#tinfo"); if (!el || !l) return;
-    el.innerHTML = `<div style="font-family:var(--f-head);font-weight:600;margin-bottom:4px">Day ${l.gun} · ${l.saat}</div>
-      <div>⚡ Load <b class="num">${fmt.mw(l.e.yuk, 1)} MW</b> · Solar <b class="num">${fmt.mw(l.e.ges, 1)}</b></div>
-      <div>🔋 Battery <b class="num">${Math.round(l.e.soc * 100)}%</b> · H₂ <b class="num">${l.h2 ? l.h2.stok : 0} kg</b></div>
-      <div>🚚 <b class="num">${l.l.aktif}</b> vehicles on the road · 🧰 <b class="num">${(l.l.araclar || []).filter((a) => a[5] === "usta").length}</b> technicians on a job</div>
-      <div>🌫 <b class="num">${fmt.n(l.k.co2_anlik, 1)}</b> tCO₂/h · wind ${l.ruzgar ? l.ruzgar.hiz : "—"} m/s</div>
-      ${l.afet ? `<div class="t-crit" style="margin-top:4px;font-weight:600">${l.afet.tip === "deprem" ? `🌍 M${l.afet.M} earthquake` : "☣ Chemical leak"} active</div>` : ""}
-      ${l.ap ? `<div class="t-ok" style="margin-top:4px">✈ Autopilot active</div>` : ""}`;
+    el.innerHTML = `<div style="font-family:var(--f-head);font-weight:600;margin-bottom:4px">${L(`Day`, `Gün`)} ${l.gun} · ${l.saat}</div>
+      <div>${L(`⚡ Load`, `⚡ Yük`)} <b class="num">${fmt.mw(l.e.yuk, 1)} MW</b> ${L(`· Solar`, `· GES`)} <b class="num">${fmt.mw(l.e.ges, 1)}</b></div>
+      <div>${L(`🔋 Battery`, `🔋 Batarya`)} <b class="num">${Math.round(l.e.soc * 100)}%</b> · H₂ <b class="num">${l.h2 ? l.h2.stok : 0} kg</b></div>
+      <div>🚚 <b class="num">${l.l.aktif}</b> ${L(`vehicles on the road · 🧰`, `araç yolda · 🧰`)} <b class="num">${(l.l.araclar || []).filter((a) => a[5] === "usta").length}</b> ${L(`technicians on a job`, `usta görevde`)}</div>
+      <div>🌫 <b class="num">${fmt.n(l.k.co2_anlik, 1)}</b> ${L(`tCO₂/h · wind`, `tCO₂/sa · rüzgâr`)} ${l.ruzgar ? l.ruzgar.hiz : "—"} m/s</div>
+      ${l.afet ? `<div class="t-crit" style="margin-top:4px;font-weight:600">${l.afet.tip === "deprem" ? `🌍 M${l.afet.M} ${L(`earthquake`, `deprem`)}` : L("☣ Chemical leak", "☣ Kimyasal sızıntı")} ${L(`active`, `aktif`)}</div>` : ""}
+      ${l.ap ? `<div class="t-ok" style="margin-top:4px">${L(`✈ Autopilot active`, `✈ Otopilot devrede`)}</div>` : ""}`;
   },
   update(l) { this.info(l); },
   unmount() { if (R) { R.stop(); R.ro.disconnect(); R.renderer.dispose(); R = null; } },

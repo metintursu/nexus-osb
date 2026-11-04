@@ -1,4 +1,5 @@
 """Minute-by-minute model of a single plant: shifts, load, power, gas, water, output, waste, carbon."""
+from ..i18n import L, LANG
 import math
 
 from .data import SECTORS, GAS_CO2, GAS_PRICE, WATER_PRICE
@@ -68,11 +69,11 @@ class Factory:
         if self.fault:
             self.status, self.reason = self.fault[0], self.fault[2]
         elif w.outage and not (s["kritik"] and w.energy.critical_ok):
-            self.status, self.reason = "durdu", "Grid outage — load shed"
+            self.status, self.reason = "durdu", L("Grid outage — load shed", "Şebeke kesintisi — yük atıldı")
         elif self.in_shift(h):
             self.status, self.reason = "calisiyor", ""
         else:
-            self.status, self.reason = "bosta", "Off shift"
+            self.status, self.reason = "bosta", L("Off shift", "Vardiya dışı")
 
         # target load
         if self.status == "calisiyor" and self.profile:
