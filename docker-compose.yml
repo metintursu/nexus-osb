@@ -1,0 +1,37 @@
+name: nexus-osb
+
+services:
+  nexus:
+    build: ./backend
+    container_name: nexus-osb
+    ports:
+      - "8080:8080"
+    environment:
+      # Bilgisayarındaki Ollama (ücretsiz, yerel). Model adı boşsa yüklü ilk model seçilir.
+      OLLAMA_URL: http://host.docker.internal:11434
+      OLLAMA_MODEL: ""
+      MQTT_HOST: mqtt
+      MQTT_PORT: "1883"
+      NEXUS_SEED: "42"
+      # EPİAŞ PTF için (isteğe bağlı): proje klasöründeki .env dosyasından okunur, şifre imaja girmez
+      EPIAS_KULLANICI: ${EPIAS_KULLANICI:-}
+      EPIAS_SIFRE: ${EPIAS_SIFRE:-}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - nexus-data:/data
+    depends_on:
+      - mqtt
+    restart: unless-stopped
+
+  mqtt:
+    image: eclipse-mosquitto:2
+    container_name: nexus-mqtt
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+    restart: unless-stopped
+
+volumes:
+  nexus-data:
